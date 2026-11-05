@@ -1,0 +1,25 @@
+# Deploying this Blueprint creates paid resources. Review the plan and disk
+# pricing in Render before confirming. One instance owns the SQLite database.
+services:
+  - type: web
+    name: narino360-observatorio
+    runtime: node
+    plan: starter
+    numInstances: 1
+    autoDeploy: false
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node scripts/start-production.mjs
+    healthCheckPath: /acceso
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: DATA_DIR
+        value: /var/data/narino360
+    disk:
+      name: narino360-data
+      mountPath: /var/data
+      sizeGB: 1

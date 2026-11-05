@@ -83,6 +83,11 @@ entorno de Nariño; no certifica pertenencia a límites municipales.
 
 ## Persistencia y despliegue
 
+Para obtener una URL pública desde el navegador, sigue la
+[guía de despliegue en Render](docs/despliegue-render.md). El repositorio incluye
+un Blueprint con disco persistente; crear ese servicio requiere revisar y aceptar
+el costo en Render. La configuración por sí sola no realiza el despliegue.
+
 ```bash
 npm run build
 npm start
