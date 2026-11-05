@@ -1,0 +1,473 @@
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
+import sharp from "sharp";
+import {
+  MUNICIPALITIES,
+  validateActivity,
+  parseBulletin,
+  themes,
+} from "../src/lib/domain";
+const temp = mkdtempSync(join(tmpdir(), "narino360-api-"));
+const origin = "http://127.0.0.1:3138",
+  password = randomBytes(20).toString("hex");
+let server: ChildProcess,
+  admin = "",
+  editor = "",
+  guest = "",
+  activityId = 0,
+  assetId = "";
+let db: typeof import("../src/lib/db");
+const activity = {
+  title: "Jornada de prueba",
+  date: "2026-10-15",
+  municipality: "Pasto",
+  program: "PISCC",
+  latitude: 1.2136,
+  longitude: -77.2811,
+  people: 125,
+  families: 30,
+  weaponsSeized: 2,
+  weaponsVoluntary: 3,
+  objective: "Prevención y convivencia comunitaria",
+  summary: "Jornada de diálogo, desarme y seguridad con jóvenes.",
+  pisccGoal: "Meta de prueba",
+  budgetApproved: 5000000,
+  budgetExecuted: 2000000,
+};
+const request = (
+  url: string,
+  method = "GET",
+  data?: unknown,
+  cookie = "",
+  customOrigin = origin,
+) =>
+  fetch(origin + url, {
+    method,
+    headers: {
+      origin: customOrigin,
+      ...(cookie ? { cookie } : {}),
+      ...(data instanceof FormData
+        ? {}
+        : { "content-type": "application/json" }),
+    },
+    ...(data !== undefined
+      ? { body: data instanceof FormData ? data : JSON.stringify(data) }
+      : {}),
+  });
+async function login(username: string, pass = password) {
+  const r = await request("/api/auth", "POST", {
+    action: "login",
+    username,
+    password: pass,
+  });
+  assert.equal(r.status, 200, await r.clone().text());
+  return r.headers.get("set-cookie")!.split(";")[0];
+}
+before(
+  async () => {
+    process.env.DATA_DIR = temp;
+    const auth = await import("../src/lib/auth");
+    db = await import("../src/lib/db");
+    auth.createUser(
+      "admin",
+      "Administrador de prueba",
+      password,
+      "Administrador",
+    );
+    auth.createUser("editor", "Editor de prueba", password, "Editor");
+    server = spawn(
+      process.execPath,
+      [
+        "node_modules/next/dist/bin/next",
+        "start",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        "3138",
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: "production",
+          DATA_DIR: temp,
+          APP_ORIGIN: origin,
+          NEXT_TELEMETRY_DISABLED: "1",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let log = "";
+    server.stdout?.on("data", (c) => {
+      log += c;
+    });
+    server.stderr?.on("data", (c) => {
+      log += c;
+    });
+    let ready = false;
+    for (let i = 0; i < 80; i++) {
+      try {
+        const r = await fetch(origin + "/acceso");
+        if (r.ok) {
+          ready = true;
+          break;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    assert.ok(ready, log);
+    admin = await login("admin");
+    editor = await login("editor");
+    const r = await request("/api/auth", "POST", {
+      action: "guest",
+      firstName: "Ana",
+      lastName: "Prueba",
+      entity: "Entidad de prueba",
+      position: "Analista",
+    });
+    assert.equal(r.status, 200);
+    guest = r.headers.get("set-cookie")!.split(";")[0];
+  },
+  { timeout: 30000 },
+);
+after(async () => {
+  if (server) {
+    server.kill("SIGTERM");
+    await new Promise<void>((resolve) => {
+      if (server.exitCode !== null) return resolve();
+      server.once("exit", () => resolve());
+    });
+  }
+  db?.db().close();
+  rmSync(temp, { recursive: true, force: true });
+});
+test("Catálogo de 64 municipios únicos, extracción y analítica sin inventar datos", () => {
+  assert.equal(MUNICIPALITIES.length, 64);
+  assert.equal(new Set(MUNICIPALITIES).size, 64);
+  const p = parseBulletin(
+    "PISCC en Pasto. 15/10/2026. 125 personas y 30 familias. Coordenadas: 1.2136, -77.2811. 2 armas incautadas.",
+  );
+  assert.equal(p.municipality, "Pasto");
+  assert.equal(p.date, "2026-10-15");
+  assert.equal(p.people, 125);
+  assert.equal(p.latitude, 1.2136);
+  assert.equal(p.weaponsSeized, 2);
+  assert.equal(parseBulletin("Reunión comunitaria").latitude, undefined);
+  assert.equal(
+    parseBulletin("Gobernación de Nariño. Jornada en Pasto.").municipality,
+    undefined,
+  );
+  assert.equal(
+    parseBulletin("Gobernación de Nariño. Municipio: Pasto.").municipality,
+    "Pasto",
+  );
+  assert.ok(
+    themes([validateActivity(activity)]).find((t) => t.name === "Desarme")!
+      .count === 1,
+  );
+  assert.throws(() => validateActivity({ ...activity, date: "2026-02-31" }));
+  assert.throws(() =>
+    validateActivity({ ...activity, budgetExecuted: 9000000 }),
+  );
+  assert.throws(() => validateActivity({ ...activity, latitude: null }));
+});
+test("Autenticación y autorización en servidor, incluido CSRF", async () => {
+  assert.equal((await request("/api/jornadas")).status, 401);
+  assert.equal(
+    (await request("/api/jornadas", "POST", activity, guest)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "POST",
+        activity,
+        editor,
+        "https://otro.example",
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await request("/api/auditoria", "GET", undefined, guest)).status,
+    403,
+  );
+  assert.equal(
+    (await request("/api/auditoria", "GET", undefined, editor)).status,
+    403,
+  );
+  assert.equal(
+    (await request("/api/usuarios", "POST", { username: "ataque" }, editor))
+      .status,
+    403,
+  );
+  assert.equal(
+    (
+      await request("/api/auth", "POST", {
+        action: "login",
+        username: "admin",
+        password: "incorrecta",
+      })
+    ).status,
+    401,
+  );
+});
+test("Registro, edición, persistencia y consulta de jornadas", async () => {
+  const r = await request("/api/jornadas", "POST", activity, editor);
+  assert.equal(r.status, 201, await r.clone().text());
+  const data = await (
+    await request("/api/jornadas", "GET", undefined, guest)
+  ).json();
+  assert.equal(data.activities.length, 1);
+  activityId = data.activities[0].id;
+  assert.equal(data.activities[0].people, 125);
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "PUT",
+        { ...activity, id: activityId, people: 150 },
+        editor,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(db.listActivities()[0].people, 150);
+  assert.equal(
+    (await request("/api/jornadas", "DELETE", { id: activityId }, editor))
+      .status,
+    403,
+  );
+});
+test("Importación valida todo antes de insertar y rechaza números o JSON inválidos", async () => {
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "POST",
+        [activity, { ...activity, people: -1 }],
+        editor,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(db.listActivities().length, 1);
+  assert.equal(
+    (await request("/api/jornadas", "POST", null, editor)).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "POST",
+        { ...activity, municipality: "Municipio inexistente" },
+        editor,
+      )
+    ).status,
+    400,
+  );
+});
+test("Evidencias privadas, decodificación segura y presentación ordenable", async () => {
+  const buffer = await sharp({
+    create: { width: 160, height: 90, channels: 3, background: "#235947" },
+  })
+    .png()
+    .toBuffer();
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob([new Uint8Array(buffer)], { type: "image/png" }),
+    "test.png",
+  );
+  form.set("kind", "diapositiva");
+  form.set("title", "Diapositiva de prueba");
+  const r = await request("/api/media", "POST", form, editor);
+  assert.equal(r.status, 201, await r.clone().text());
+  assetId = (await r.json()).asset.id;
+  assert.equal((await request("/api/media/" + assetId)).status, 401);
+  const image = await request("/api/media/" + assetId, "GET", undefined, guest);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get("content-type"), "image/webp");
+  assert.equal(
+    (await request("/api/media", "PUT", { order: [assetId] }, editor)).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/media", "PUT", { order: ["bad"] }, editor)).status,
+    400,
+  );
+  const invalid = new FormData();
+  invalid.set("file", new Blob(["not an image"]), "bad.png");
+  invalid.set("kind", "evidencia");
+  invalid.set("title", "Inválida");
+  assert.equal(
+    (await request("/api/media", "POST", invalid, editor)).status,
+    400,
+  );
+  const denied = new FormData();
+  denied.set("file", new Blob([new Uint8Array(buffer)]), "test.png");
+  denied.set("kind", "evidencia");
+  denied.set("title", "No autorizado");
+  assert.equal(
+    (await request("/api/media", "POST", denied, guest)).status,
+    403,
+  );
+});
+test("Cambio autónomo de contraseña revoca otras sesiones y el hash no guarda texto plano", async () => {
+  const oldSession = await login("editor");
+  const next = randomBytes(24).toString("hex");
+  const r = await request(
+    "/api/auth",
+    "POST",
+    { action: "password", current: password, next },
+    editor,
+  );
+  assert.equal(r.status, 200);
+  editor = r.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(
+    (await request("/api/auth", "GET", undefined, oldSession)).status,
+    401,
+  );
+  assert.equal(
+    (
+      await request("/api/auth", "POST", {
+        action: "login",
+        username: "editor",
+        password,
+      })
+    ).status,
+    401,
+  );
+  assert.ok(await login("editor", next));
+  const row = db
+    .db()
+    .prepare("SELECT password_hash FROM usuarios WHERE username='editor'")
+    .get() as { password_hash: string };
+  assert.ok(!row.password_hash.includes(next));
+  assert.match(row.password_hash, /^[a-f0-9]+:[a-f0-9]+$/);
+});
+test("Auditoría registra acceso de invitados, inicio, edición y cambio de contraseña", async () => {
+  const data = await (
+    await request("/api/auditoria", "GET", undefined, admin)
+  ).json();
+  assert.equal(data.guests[0].entidad, "Entidad de prueba");
+  for (const event of [
+    "sesion.iniciada",
+    "jornadas.creadas",
+    "jornada.editada",
+    "contraseña.actualizada",
+  ])
+    assert.ok(
+      data.events.some((e: { event: string }) => e.event === event),
+      event,
+    );
+});
+test("Cierre de sesión y eliminación administrativa", async () => {
+  assert.equal(
+    (await request("/api/media", "DELETE", { id: assetId }, admin)).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/media/" + assetId, "GET", undefined, guest)).status,
+    404,
+  );
+  assert.equal(
+    (await request("/api/jornadas", "DELETE", { id: activityId }, admin))
+      .status,
+    200,
+  );
+  assert.equal(db.listActivities().length, 0);
+  assert.equal(
+    (await request("/api/auth", "POST", { action: "logout" }, guest)).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/auth", "GET", undefined, guest)).status,
+    401,
+  );
+});
+
+test("El administrador crea funcionarios y las contraseñas preservan sus espacios", async () => {
+  const spacedPassword = "  Clave-Con-Espacios-2026  ";
+  const user = {
+    username: "nuevo-editor",
+    name: "Nueva funcionaria",
+    password: spacedPassword,
+    role: "Editor",
+  };
+  assert.equal(
+    (await request("/api/usuarios", "POST", user, admin)).status,
+    201,
+  );
+  assert.equal(
+    (await request("/api/usuarios", "POST", user, admin)).status,
+    409,
+  );
+  const cookie = await login(user.username, spacedPassword);
+  const identity = await (
+    await request("/api/auth", "GET", undefined, cookie)
+  ).json();
+  assert.equal(identity.user.role, "Editor");
+  assert.equal(
+    (
+      await request("/api/auth", "POST", {
+        action: "login",
+        username: user.username,
+        password: spacedPassword.trim(),
+      })
+    ).status,
+    401,
+  );
+  for (let i = 0; i < 8; i++)
+    assert.equal(
+      (
+        await request("/api/auth", "POST", {
+          action: "login",
+          username: "usuario-inexistente",
+          password: "incorrecta",
+        })
+      ).status,
+      401,
+    );
+  assert.equal(
+    (
+      await request("/api/auth", "POST", {
+        action: "login",
+        username: "usuario-inexistente",
+        password: "incorrecta",
+      })
+    ).status,
+    429,
+  );
+});
+
+test("Los soportes PDF se descargan con autenticación y no se ejecutan en el visor", async () => {
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["%PDF-1.4\n% Soporte de prueba\n%%EOF"], {
+      type: "application/pdf",
+    }),
+    "soporte.pdf",
+  );
+  form.set("kind", "documento");
+  form.set("title", "Soporte de prueba");
+  const upload = await request("/api/media", "POST", form, admin);
+  assert.equal(upload.status, 201);
+  const id = (await upload.json()).asset.id;
+  const response = await request("/api/media/" + id, "GET", undefined, admin);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-disposition")!, /^attachment;/);
+  assert.equal(response.headers.get("content-security-policy"), "sandbox");
+  assert.equal((await request("/api/media/" + id)).status, 401);
+  assert.equal(
+    (await request("/api/media", "DELETE", { id }, admin)).status,
+    200,
+  );
+});

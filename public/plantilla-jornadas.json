@@ -1,0 +1,19 @@
+[
+  {
+    "title": "REEMPLAZAR: título de la jornada real",
+    "date": "AAAA-MM-DD",
+    "municipality": "REEMPLAZAR: municipio del catálogo",
+    "program": "PISCC",
+    "latitude": null,
+    "longitude": null,
+    "people": 0,
+    "families": 0,
+    "weaponsSeized": 0,
+    "weaponsVoluntary": 0,
+    "objective": "REEMPLAZAR: objetivo de la jornada",
+    "summary": "REEMPLAZAR: resumen operativo y resultados",
+    "pisccGoal": "",
+    "budgetApproved": 0,
+    "budgetExecuted": 0
+  }
+]
