@@ -466,3 +466,163 @@ test("El mapa identifica su origen, carga teselas válidas y maneja 403 sin dibu
   await expect(page.locator(".map-feedback")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("La administración valida usuarios con puntos y guiones sin errores de expresión regular", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  let reads = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/usuarios") && request.method() === "GET")
+      reads++;
+  });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Mi cuenta y acceso", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  expect(reads).toBe(0);
+  await dialog
+    .getByText("Gestionar cuentas institucionales", { exact: true })
+    .click();
+  await expect(dialog.locator(".user-list strong").first()).toBeVisible();
+  expect(reads).toBe(1);
+  const username = dialog.getByLabel("Usuario", { exact: true });
+  await username.fill("nombre invalido");
+  expect(
+    await username.evaluate((input: HTMLInputElement) => input.checkValidity()),
+  ).toBe(false);
+  await username.fill("editor.local-prueba_26");
+  expect(
+    await username.evaluate((input: HTMLInputElement) => input.checkValidity()),
+  ).toBe(true);
+  await dialog
+    .getByLabel("Nombre completo", { exact: true })
+    .fill("Funcionario de prueba de formulario");
+  await dialog
+    .getByLabel("Contraseña inicial", { exact: true })
+    .fill("Solo-Pruebas-Form-2026");
+  await dialog
+    .getByRole("button", { name: "Crear cuenta", exact: true })
+    .click();
+  await expect(
+    dialog.getByText("Cuenta creada.", { exact: true }),
+  ).toBeVisible();
+  await expect(dialog.locator(".user-list")).toContainText(
+    "editor.local-prueba_26",
+  );
+  expect(
+    errors.filter((message) =>
+      /Pattern attribute|Invalid regular expression/.test(message),
+    ),
+  ).toEqual([]);
+});
+
+test("Los errores y tiempos de espera de usuarios no recargan la página y las solicitudes se cancelan", async ({
+  page,
+}) => {
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  let documentRequests = 0,
+    failedRequests = 0;
+  page.on("request", (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+      documentRequests++;
+  });
+  page.on("requestfailed", (request) => {
+    if (request.url().endsWith("/api/usuarios")) failedRequests++;
+  });
+  let mode: "unavailable" | "hung" | "expired" = "unavailable";
+  await page.route("**/api/usuarios", async (route) => {
+    if (mode === "hung") return;
+    if (mode === "expired") {
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "La sesión expiró. Ingresa nuevamente.",
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      contentType: "text/html",
+      body: "<html>Service unavailable</html>",
+    });
+  });
+  async function openAccounts() {
+    await page
+      .getByRole("button", { name: "Mi cuenta y acceso", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    const request = page.waitForRequest((r) =>
+      r.url().endsWith("/api/usuarios"),
+    );
+    await dialog
+      .getByText("Gestionar cuentas institucionales", { exact: true })
+      .click();
+    await request;
+    return dialog;
+  }
+  let dialog = await openAccounts();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "El servidor no está disponible",
+  );
+  expect(documentRequests).toBe(0);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  mode = "hung";
+  await page.clock.install();
+  dialog = await openAccounts();
+  await page.clock.fastForward(30001);
+  await expect(dialog.getByRole("alert")).toContainText(
+    "El servidor no respondió a tiempo",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Crear cuenta", exact: true }),
+  ).toBeEnabled();
+  expect(documentRequests).toBe(0);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  const beforeCancel = failedRequests;
+  dialog = await openAccounts();
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect.poll(() => failedRequests).toBeGreaterThan(beforeCancel);
+  mode = "expired";
+  await page.context().clearCookies();
+  dialog = await openAccounts();
+  await expect(dialog.getByRole("alert")).toContainText("La sesión expiró");
+  expect(documentRequests).toBe(0);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Volver a ingresar", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Volver a ingresar", exact: true })
+    .click();
+  await expect(page).toHaveURL(/acceso/);
+});

@@ -44,7 +44,7 @@ import {
   type Asset,
   type Identity,
 } from "@/lib/domain";
-import { api, number, csvDownload } from "./api";
+import { api, number, csvDownload, SESSION_EXPIRED_EVENT } from "./api";
 import Modal from "./modal";
 import ActivityForm from "./activity-form";
 import MediaUpload from "./media-upload";
@@ -106,6 +106,7 @@ export default function Observatory({
     [modal, setModal] = useState<ModalState>(null),
     [toast, setToast] = useState(""),
     [error, setError] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
   const canEdit = user.role !== "Invitado";
   useEffect(() => {
     const update = () => {
@@ -118,7 +119,12 @@ export default function Observatory({
     };
     update();
     window.addEventListener("hashchange", update);
-    return () => window.removeEventListener("hashchange", update);
+    const expire = () => setSessionExpired(true);
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire);
+    return () => {
+      window.removeEventListener("hashchange", update);
+      window.removeEventListener(SESSION_EXPIRED_EVENT, expire);
+    };
   }, [user.role]);
   const filtered = useMemo(
     () =>
@@ -384,6 +390,14 @@ export default function Observatory({
               )}
             </div>
           </div>
+          {sessionExpired && (
+            <div className="notice error" role="alert">
+              <span>Tu sesión expiró. Vuelve a ingresar para continuar.</span>
+              <Link className="button secondary" href="/acceso">
+                Volver a ingresar
+              </Link>
+            </div>
+          )}
           {toast && (
             <div className="notice success" role="status">
               <Check size={18} />
@@ -1246,20 +1260,43 @@ function UserManagement() {
     >([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [success, setSuccess] = useState("");
+    [success, setSuccess] = useState(""),
+    [expanded, setExpanded] = useState(false),
+    [loading, setLoading] = useState(false);
   useEffect(() => {
-    api<{ users: typeof users }>("/api/usuarios")
-      .then((r) => setUsers(r.users))
-      .catch((e) => setError(e.message));
-  }, []);
+    if (!expanded) return;
+    const controller = new AbortController();
+    api<{ users: typeof users }>("/api/usuarios", { signal: controller.signal })
+      .then((r) => {
+        if (!controller.signal.aborted) setUsers(r.users);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [expanded]);
   return (
-    <details className="import-panel">
+    <details
+      className="import-panel"
+      onToggle={(event) => {
+        const open = event.currentTarget.open;
+        setExpanded(open);
+        if (open) {
+          setLoading(true);
+          setError("");
+        }
+      }}
+    >
       <summary>
         <Users size={16} />
         Gestionar cuentas institucionales
       </summary>
       <div className="form-stack">
         <div className="user-list">
+          {loading && <p role="status">Cargando cuentas…</p>}
           {users.map((u) => (
             <div key={u.id}>
               <strong>{u.name}</strong>
@@ -1303,7 +1340,7 @@ function UserManagement() {
             <input
               name="username"
               required
-              pattern="[a-z0-9._-]{3,60}"
+              pattern={"[a-z0-9._\\-]{3,60}"}
               autoComplete="off"
             />
           </label>
@@ -1325,7 +1362,7 @@ function UserManagement() {
               autoComplete="new-password"
             />
           </label>
-          <button className="button primary" disabled={busy}>
+          <button className="button primary" disabled={busy || loading}>
             <Plus size={16} />
             Crear cuenta
           </button>

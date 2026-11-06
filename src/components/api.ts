@@ -1,23 +1,84 @@
+type ApiOptions = RequestInit & { timeoutMs?: number };
+export const SESSION_EXPIRED_EVENT = "narino360:session-expired";
 export async function api<T = Record<string, unknown>>(
   url: string,
-  options?: RequestInit,
+  options: ApiOptions = {},
 ): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...(options?.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
-      ...options?.headers,
-    },
-  });
-  const result = await response.json();
-  if (!response.ok) {
-    if (response.status === 401 && window.location.pathname !== "/acceso")
-      window.location.reload();
-    throw new Error(result.error || "No se pudo completar la operación.");
+  const {
+    timeoutMs = !options.method || options.method.toUpperCase() === "GET"
+      ? 30000
+      : 120000,
+    signal,
+    ...request
+  } = options;
+  const controller = new AbortController();
+  let timedOut = false;
+  const cancel = () => controller.abort(signal?.reason);
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener("abort", cancel, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    const headers = new Headers(request.headers);
+    if (!(request.body instanceof FormData) && !headers.has("Content-Type"))
+      headers.set("Content-Type", "application/json");
+    const response = await fetch(url, {
+      ...request,
+      headers,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let result: unknown = null;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      /* Proxies can return an HTML error page. */
+    }
+    if (!response.ok) {
+      if (
+        response.status === 401 &&
+        typeof window !== "undefined" &&
+        window.location.pathname !== "/acceso"
+      )
+        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      const detail =
+        result &&
+        typeof result === "object" &&
+        "error" in result &&
+        typeof result.error === "string"
+          ? result.error
+          : undefined;
+      throw new Error(
+        detail ||
+          (response.status >= 500
+            ? "El servidor no está disponible en este momento. Intenta de nuevo más tarde."
+            : "No se pudo completar la operación (HTTP " +
+              response.status +
+              ")."),
+      );
+    }
+    if (!result || typeof result !== "object")
+      throw new Error(
+        "El servidor devolvió una respuesta no válida. Intenta nuevamente.",
+      );
+    return result as T;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    if (timedOut)
+      throw new Error(
+        "El servidor no respondió a tiempo. No se pudo confirmar la operación; verifica la información antes de reenviarla.",
+      );
+    if (error instanceof TypeError)
+      throw new Error(
+        "No se pudo conectar con el servidor. Comprueba la conexión e inténtalo nuevamente.",
+      );
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", cancel);
   }
-  return result as T;
 }
 export const number = (v: number) => new Intl.NumberFormat("es-CO").format(v);
 export const money = (v: number) =>
