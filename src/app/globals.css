@@ -1091,7 +1091,7 @@ h3 {
   bottom: 35px;
   left: 50%;
   transform: translateX(-50%);
-  background: color-mix(in srgb, var(--black) 94.9%, transparent);
+  background: color-mix(in srgb, var(--white) 95%, transparent);
   padding: 15px 20px;
   box-shadow: 0 4px 15px color-mix(in srgb, var(--black) 6.3%, transparent);
   border: 1px solid var(--border);
@@ -1121,7 +1121,7 @@ h3 {
   font-size: 8px;
   letter-spacing: 1px;
   color: var(--ink);
-  background: color-mix(in srgb, var(--black) 94.9%, transparent);
+  background: color-mix(in srgb, var(--white) 95%, transparent);
   border-radius: 5px;
   box-shadow: 0 1px 7px color-mix(in srgb, var(--black) 3.9%, transparent);
   pointer-events: none;
@@ -2974,4 +2974,34 @@ td small {
   .publication-filters label {
     min-width: 100px;
   }
+}
+
+.map-feedback {
+  position: absolute;
+  z-index: 450;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90%, 400px);
+  padding: 16px 18px;
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 3px 15px color-mix(in srgb, var(--black) 10%, transparent);
+}
+.map-feedback strong {
+  font-size: 12px;
+}
+.map-feedback p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 8px 0 12px;
+}
+.map-feedback .button {
+  min-height: 32px;
+  font-size: 11px;
+  padding: 7px 10px;
 }

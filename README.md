@@ -36,8 +36,14 @@ Los cambios de contraseña revocan las demás sesiones del funcionario.
 - Catálogo de los 64 municipios. Jornadas con coordenadas decimales y metas PISCC.
 - Mapa Leaflet (equivalente web de la cartografía Folium), agrupación de marcadores,
   popups y calor ponderado por personas reportadas. Las teselas provienen de
-  `*.tile.openstreetmap.org` y requieren acceso desde el navegador. Si no están
-  disponibles, se conserva la consulta de coordenadas en los registros.
+  `tile.openstreetmap.org` y requieren acceso desde el navegador. Si no están
+  disponibles, se conserva la consulta de coordenadas en los registros. Se envía
+  únicamente el origen de la aplicación mediante
+  `Referrer-Policy: strict-origin-when-cross-origin`, manteniendo la caché HTTP.
+  El estado HTTP de cada imagen se comprueba antes de mostrarla: un 403 u otro
+  fallo detiene la capa base, muestra un aviso y permite reintentar manualmente.
+  Los marcadores y el calor siguen disponibles; no se usan servidores alternos
+  para eludir bloqueos del proveedor.
 - Registro y edición manual, importación JSON de hasta 200 jornadas por operación
   y extracción asistida de boletines de WhatsApp. La importación valida todas las
   filas antes de escribir; no sustituye ni deduplica registros existentes.

@@ -340,3 +340,129 @@ test("Observatorio permite publicar, filtrar, descargar y eliminar boletines", a
   await expect(page.locator(".publication-delete")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("El mapa identifica su origen, carga teselas válidas y maneja 403 sin dibujar imágenes de bloqueo", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const tile = await sharp({
+    create: { width: 256, height: 256, channels: 3, background: "#80BEFF" },
+  })
+    .png()
+    .toBuffer();
+  let mode: "ok" | "blocked" | "offline" = "ok";
+  const requests: {
+    referer: string | undefined;
+    cookie: string | undefined;
+  }[] = [];
+  await page.route("https://tile.openstreetmap.org/**", async (route) => {
+    const headers = route.request().headers();
+    requests.push({ referer: headers.referer, cookie: headers.cookie });
+    if (mode === "offline") {
+      await route.abort("internetdisconnected");
+      return;
+    }
+    await route.fulfill({
+      status: mode === "blocked" ? 403 : 200,
+      contentType: "image/png",
+      headers: { "access-control-allow-origin": "*" },
+      body: tile,
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const response = await page.goto("/acceso");
+  expect(response!.headers()["referrer-policy"]).toBe(
+    "strict-origin-when-cross-origin",
+  );
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const saved = await page.evaluate(async () => {
+    const result = await fetch("/api/jornadas", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Jornada de prueba cartográfica",
+        date: "2026-11-05",
+        municipality: "Pasto",
+        program: "PISCC",
+        latitude: 1.2136,
+        longitude: -77.2811,
+        people: 10,
+        families: 2,
+        weaponsSeized: 0,
+        weaponsVoluntary: 0,
+        objective: "Prueba del mapa",
+        summary: "Registro temporal para probar cartografía",
+        pisccGoal: "",
+      }),
+    });
+    return result.status;
+  });
+  expect(saved).toBe(201);
+  await page.reload();
+  const images = page.locator(".leaflet-tile-pane img.leaflet-tile-loaded");
+  await expect.poll(() => images.count()).toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      images.first().evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBe(256);
+  expect(requests.length).toBeGreaterThan(0);
+  expect(
+    requests.every((r) => r.referer === "http://127.0.0.1:3139/" && !r.cookie),
+  ).toBe(true);
+  await expect(page.locator(".map-feedback")).toHaveCount(0);
+  const count = requests.length;
+  await page.locator(".leaflet-control-zoom-in").click();
+  await expect.poll(() => requests.length).toBeGreaterThan(count);
+  mode = "blocked";
+  await page.reload();
+  await expect(
+    page.getByText("Mapa base no disponible", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".map-feedback")).toContainText("HTTP 403");
+  await expect(page.locator(".leaflet-tile-pane img")).toHaveCount(0);
+  await expect
+    .poll(() => page.locator(".territory-marker").count())
+    .toBeGreaterThan(0);
+  await page.locator(".map-panel").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: testInfo.outputPath("mapa-error-controlado.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  mode = "ok";
+  await page
+    .getByRole("button", { name: "Reintentar mapa", exact: true })
+    .click();
+  await expect.poll(() => images.count()).toBeGreaterThan(0);
+  await expect(page.locator(".map-feedback")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Mapa de calor", exact: true })
+    .click();
+  await expect(page.locator(".leaflet-heatmap-layer")).toBeVisible();
+  await expect.poll(() => images.count()).toBeGreaterThan(0);
+  mode = "offline";
+  await page.reload();
+  await expect(page.locator(".map-feedback")).toContainText(
+    "No se pudo conectar",
+  );
+  await expect(page.locator(".leaflet-tile-pane img")).toHaveCount(0);
+  mode = "ok";
+  await page
+    .getByRole("button", { name: "Reintentar mapa", exact: true })
+    .click();
+  await expect.poll(() => images.count()).toBeGreaterThan(0);
+  await expect(page.locator(".map-feedback")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

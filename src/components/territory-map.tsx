@@ -1,13 +1,16 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Activity } from "@/lib/domain";
 import { number } from "./api";
+import { createOsmLayer } from "./osm-layer";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 type Props = { activities: Activity[]; heat: boolean; large?: boolean };
 export default function TerritoryMap({ activities, heat, large }: Props) {
   const element = useRef<HTMLDivElement>(null);
+  const [tileError, setTileError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cleanup = () => {};
     let cancelled = false;
@@ -18,30 +21,32 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
       if (cancelled || !element.current) return;
       const map = L.map(element.current, {
         scrollWheelZoom: false,
+        minZoom: 3,
+        maxZoom: 18,
         zoomAnimation: false,
         fadeAnimation: false,
         markerZoomAnimation: false,
       }).setView([1.55, -77.65], 7);
+      const basemap = createOsmLayer(
+        L,
+        (status) => {
+          if (!cancelled)
+            setTileError(
+              status
+                ? "El proveedor del mapa base respondió HTTP " + status + "."
+                : "No se pudo conectar con el proveedor del mapa base.",
+            );
+        },
+        () => {
+          if (!cancelled) setTileError(null);
+        },
+      );
       cleanup = () => {
+        basemap.dispose();
         map.stop();
         map.remove();
       };
-      const tiles = L.tileLayer(
-        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        {
-          maxZoom: 18,
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        },
-      ).addTo(map);
-      const status = L.control
-        .attribution({ prefix: false, position: "bottomleft" })
-        .addTo(map);
-      tiles.on("tileerror", () =>
-        status.setPrefix(
-          "Cartografía no disponible. Consulta las coordenadas en los registros.",
-        ),
-      );
+      basemap.layer.addTo(map);
       if (heat) {
         const max = Math.max(1, ...activities.map((a) => a.people));
         L.heatLayer(
@@ -117,12 +122,17 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
         if (!cancelled) map.invalidateSize();
       }, 100);
     }
-    void init();
+    void init().catch(() => {
+      if (!cancelled) {
+        cleanup();
+        setTileError("No se pudo iniciar el mapa. Vuelve a intentarlo.");
+      }
+    });
     return () => {
       cancelled = true;
       cleanup();
     };
-  }, [activities, heat]);
+  }, [activities, heat, attempt]);
   return (
     <div className={"map-container " + (large ? "large" : "")}>
       <div
@@ -130,7 +140,25 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
         className="leaflet-map"
         aria-label="Mapa de jornadas registradas en Nariño"
       />
-      {!activities.length && (
+      {tileError && (
+        <div className="map-feedback" role="status">
+          <strong>Mapa base no disponible</strong>
+          <p>
+            {tileError} Las jornadas y sus coordenadas siguen disponibles.
+            Comprueba el acceso a OpenStreetMap desde tu red.
+          </p>
+          <button
+            className="button secondary"
+            onClick={() => {
+              setTileError(null);
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Reintentar mapa
+          </button>
+        </div>
+      )}
+      {!activities.length && !tileError && (
         <div className="map-empty">
           <span className="status-dot" />
           <strong>El territorio espera sus primeros registros</strong>
