@@ -569,3 +569,40 @@ test("Las jornadas nuevas no necesitan campos presupuestales", () => {
   assert.equal(validated.budgetApproved, 0);
   assert.equal(validated.budgetExecuted, 0);
 });
+
+test("Una diapositiva JPEG se convierte, persiste y devuelve identificador de diagnóstico", async () => {
+  const jpeg = await sharp({
+    create: { width: 6000, height: 3375, channels: 3, background: "#FFD500" },
+  })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+  const form = new FormData();
+  form.set("kind", "diapositiva");
+  form.set("title", "Portada JPEG de prueba");
+  form.set(
+    "file",
+    new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }),
+    "01_portada.jpg",
+  );
+  const response = await request("/api/media", "POST", form, admin);
+  assert.equal(response.status, 201, await response.clone().text());
+  assert.match(response.headers.get("x-request-id")!, /^[a-f0-9-]{36}$/);
+  const { asset } = await response.json();
+  const image = await request(
+    "/api/media/" + asset.id,
+    "GET",
+    undefined,
+    admin,
+  );
+  assert.equal(image.status, 200);
+  const metadata = await sharp(
+    Buffer.from(await image.arrayBuffer()),
+  ).metadata();
+  assert.equal(metadata.format, "webp");
+  assert.equal(metadata.width, 4096);
+  assert.equal(metadata.height, 2304);
+  assert.equal(
+    (await request("/api/media", "DELETE", { id: asset.id }, admin)).status,
+    200,
+  );
+});

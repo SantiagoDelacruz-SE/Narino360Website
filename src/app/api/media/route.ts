@@ -31,9 +31,29 @@ export async function GET() {
 }
 export async function POST(request: Request) {
   let createdPath: string | undefined;
+  const requestId = randomUUID(),
+    started = Date.now();
+  let phase = "authorization";
+  const trace = (
+    event: string,
+    details: Record<string, string | number> = {},
+  ) =>
+    console.info(
+      "[media-upload] " +
+        JSON.stringify({
+          requestId,
+          event,
+          phase,
+          elapsedMs: Date.now() - started,
+          rssMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+          ...details,
+        }),
+    );
   try {
     sameOrigin(request);
     const user = await editor();
+    phase = "receiving";
+    trace("started");
     const limit = 16 * 1024 * 1024;
     if (Number(request.headers.get("content-length")) > limit)
       throw new AppError("El archivo supera el máximo de 15 MB.", 413);
@@ -95,6 +115,7 @@ export async function POST(request: Request) {
             publicationDate: data.get("publicationDate"),
           })
         : {};
+    trace("received", { kind, bytes: file.size });
     const id = randomUUID(),
       buffer = Buffer.from(await file.arrayBuffer());
     let encoded: Buffer, ext: string;
@@ -104,10 +125,16 @@ export async function POST(request: Request) {
       encoded = buffer;
       ext = "pdf";
     } else {
+      phase = "processing";
       try {
-        const format = (
-          await sharp(buffer, { limitInputPixels: 40000000 }).metadata()
-        ).format;
+        const imageMetadata = await sharp(buffer, {
+          limitInputPixels: 40000000,
+        }).metadata();
+        const format = imageMetadata.format;
+        trace("processing", {
+          width: imageMetadata.width || 0,
+          height: imageMetadata.height || 0,
+        });
         if (!format || !["jpeg", "png", "webp"].includes(format))
           throw new Error("Formato no permitido");
         encoded = await sharp(buffer, {
@@ -130,6 +157,8 @@ export async function POST(request: Request) {
       }
       ext = "webp";
     }
+    phase = "persisting";
+    trace("persisting", { bytes: encoded.length });
     mkdirSync(mediaDir, { recursive: true, mode: 0o700 });
     const filename = id + "." + ext;
     createdPath = assetPath(filename);
@@ -149,11 +178,29 @@ export async function POST(request: Request) {
     writeAssets([...readAssets(), asset]);
     createdPath = undefined;
     audit(actor(user), user.role, "archivo.cargado", id);
-    return NextResponse.json({ asset }, { status: 201 });
+    trace("completed");
+    return NextResponse.json(
+      { asset },
+      { status: 201, headers: { "X-Request-ID": requestId } },
+    );
   } catch (e) {
+    if (phase !== "authorization")
+      trace("failed", {
+        status: e instanceof AppError ? e.status : 500,
+        errorType: e instanceof Error ? e.name : "Unknown",
+        code:
+          e &&
+          typeof e === "object" &&
+          "code" in e &&
+          typeof e.code === "string"
+            ? e.code
+            : "none",
+      });
     if (createdPath && existsSync(/*turbopackIgnore: true*/ createdPath))
       unlinkSync(/*turbopackIgnore: true*/ createdPath);
-    return errorResponse(e);
+    const response = errorResponse(e);
+    response.headers.set("X-Request-ID", requestId);
+    return response;
   }
 }
 export async function PUT(request: Request) {

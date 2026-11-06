@@ -626,3 +626,64 @@ test("Los errores y tiempos de espera de usuarios no recargan la página y las s
     .click();
   await expect(page).toHaveURL(/acceso/);
 });
+
+test("Las diapositivas grandes se rechazan antes de subir y un JPEG válido se guarda", async ({
+  page,
+}) => {
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await page
+    .getByRole("button", { name: "Presentación estratégica", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Cargar diapositivas", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Título", { exact: true })
+    .fill("Portada JPEG de prueba");
+  let uploads = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/media") && request.method() === "POST")
+      uploads++;
+  });
+  await dialog
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "portada-muy-grande.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.alloc(15 * 1024 * 1024 + 1),
+    });
+  await dialog
+    .getByRole("button", { name: "Cargar archivos", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText("supera los 15 MB");
+  expect(uploads).toBe(0);
+  await expect(
+    dialog.getByRole("button", { name: "Cargar archivos", exact: true }),
+  ).toBeEnabled();
+  const jpeg = await sharp({
+    create: { width: 1920, height: 1080, channels: 3, background: "#FFD500" },
+  })
+    .jpeg()
+    .toBuffer();
+  await dialog
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "01_portada.jpg",
+      mimeType: "image/jpeg",
+      buffer: jpeg,
+    });
+  await dialog
+    .getByRole("button", { name: "Cargar archivos", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  expect(uploads).toBe(1);
+  await expect(page.locator(".slide-thumbnails")).toContainText(
+    "Portada JPEG de prueba",
+  );
+});

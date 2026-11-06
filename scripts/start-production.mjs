@@ -25,7 +25,9 @@ try {
   }
   origin = url.origin;
 } catch {
-  console.error("APP_ORIGIN debe ser una URL HTTPS sin ruta, parámetros ni credenciales.");
+  console.error(
+    "APP_ORIGIN debe ser una URL HTTPS sin ruta, parámetros ni credenciales.",
+  );
   process.exit(1);
 }
 
@@ -34,6 +36,19 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   console.error("PORT debe ser un puerto válido.");
   process.exit(1);
 }
+
+const revision = process.env.RENDER_GIT_COMMIT;
+console.info(
+  "[observatorio] " +
+    JSON.stringify({
+      event: "startup",
+      revision:
+        revision && /^[a-f0-9]{7,40}$/i.test(revision)
+          ? revision.slice(0, 7)
+          : "local",
+      persistentDataConfigured: Boolean(process.env.DATA_DIR),
+    }),
+);
 
 const require = createRequire(import.meta.url);
 const next = require.resolve("next/dist/bin/next");

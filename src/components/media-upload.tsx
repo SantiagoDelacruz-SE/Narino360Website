@@ -35,6 +35,13 @@ export default function MediaUpload({
     try {
       if (files.length < 1 || files.length > 20)
         throw new Error("Selecciona de 1 a 20 archivos por carga.");
+      const oversized = files.find((file) => file.size > 15 * 1024 * 1024);
+      if (oversized)
+        throw new Error(
+          'El archivo "' +
+            oversized.name +
+            '" supera los 15 MB. Reduce su tamaño antes de cargarlo.',
+        );
       for (const file of files) {
         setProgress("Cargando " + (count + 1) + " de " + files.length + "…");
         const data = new FormData();

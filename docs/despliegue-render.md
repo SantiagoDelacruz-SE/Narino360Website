@@ -19,18 +19,18 @@ configuración de este repositorio no crea servicios por sí sola.
 
 Si no utilizas Blueprint, crea un servicio web Node.js con estos parámetros:
 
-| Campo | Valor |
-| --- | --- |
-| Rama | `main` |
-| Node.js | `24.22.1` |
-| Build | `npm ci --include=dev && npm run build` |
-| Start | `node scripts/start-production.mjs` |
-| Health check | `/acceso` |
-| Instancias | Una |
-| Disco persistente | Montado en `/var/data` |
-| Variable `DATA_DIR` | `/var/data/narino360` |
-| Variable `NODE_ENV` | `production` |
-| Variable `NEXT_TELEMETRY_DISABLED` | `1` |
+| Campo                              | Valor                                   |
+| ---------------------------------- | --------------------------------------- |
+| Rama                               | `main`                                  |
+| Node.js                            | `24.22.1`                               |
+| Build                              | `npm ci --include=dev && npm run build` |
+| Start                              | `node scripts/start-production.mjs`     |
+| Health check                       | `/acceso`                               |
+| Instancias                         | Una                                     |
+| Disco persistente                  | Montado en `/var/data`                  |
+| Variable `DATA_DIR`                | `/var/data/narino360`                   |
+| Variable `NODE_ENV`                | `production`                            |
+| Variable `NEXT_TELEMETRY_DISABLED` | `1`                                     |
 
 El script de arranque toma el puerto de `PORT` y el origen público de
 `RENDER_EXTERNAL_URL`, que proporciona Render. Esto permite que el inicio de
@@ -77,3 +77,20 @@ activar despliegues automáticos desde su configuración si lo prefieres.
 Mantén una única instancia mientras se utilicen SQLite y el catálogo JSON.
 Configura respaldos del disco completo y copias consistentes de SQLite. No
 restablezcas ni borres `/var/data` al actualizar el código.
+
+## Diagnosticar una carga que falla
+
+La línea `[observatorio]` al iniciar muestra el commit de Render en `revision`.
+Comprueba que coincida con el commit que deseas desplegar. Una pestaña abierta
+antes de actualizar puede conservar el código anterior: recárgala después de que
+el nuevo despliegue esté activo.
+
+Las líneas `[media-upload]` de Logs usan un identificador por solicitud e indican
+las etapas `receiving`, `processing` y `persisting`, además de los eventos
+`completed` o `failed`. Incluyen tamaño, dimensiones, duración y memoria del
+proceso, sin nombres de archivo, títulos, contenido, contraseñas ni cookies.
+
+Si el navegador muestra un error de conexión, busca estas líneas alrededor de la
+misma hora y revisa también Events por reinicios. El mensaje del navegador por sí
+solo no identifica un fallo de memoria, disco o red. Las imágenes de más de 15 MB
+se rechazan en el formulario antes de iniciar la transferencia.
