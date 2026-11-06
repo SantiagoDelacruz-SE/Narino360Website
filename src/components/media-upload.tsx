@@ -4,6 +4,7 @@ import { Upload } from "lucide-react";
 import {
   MUNICIPALITIES,
   PROGRAMS,
+  PUBLICATION_TYPES,
   type Activity,
   type Asset,
 } from "@/lib/domain";
@@ -62,9 +63,11 @@ export default function MediaUpload({
     <form className="form-stack" onSubmit={submit}>
       <div className="notice">
         {" "}
-        {kind === "diapositiva"
-          ? "Carga imágenes de tu presentación oficial, preferiblemente en formato 16:9. Se mostrarán en el orden de carga."
-          : "Los archivos se guardan por separado de la base de datos y estarán disponibles para los usuarios con sesión."}
+        {kind === "publicacion"
+          ? "Publica boletines y otros productos del observatorio en PDF. Indica su tipo y fecha de publicación para facilitar la consulta."
+          : kind === "diapositiva"
+            ? "Carga imágenes de tu presentación oficial, preferiblemente en formato 16:9. Se mostrarán en el orden de carga."
+            : "Los archivos se guardan por separado de la base de datos y estarán disponibles para los usuarios con sesión."}
       </div>
       <label>
         Título
@@ -73,9 +76,11 @@ export default function MediaUpload({
           required
           maxLength={200}
           placeholder={
-            kind === "diapositiva"
-              ? "Título de la diapositiva"
-              : "Nombre de la evidencia"
+            kind === "publicacion"
+              ? "Título del boletín o producto"
+              : kind === "diapositiva"
+                ? "Título de la diapositiva"
+                : "Nombre de la evidencia"
           }
         />
       </label>
@@ -88,7 +93,28 @@ export default function MediaUpload({
           placeholder="Contexto, fecha, entidad o referencia documental"
         />
       </label>
-      {kind !== "diapositiva" && (
+      {kind === "publicacion" && (
+        <div className="field-grid">
+          <label>
+            Tipo de publicación
+            <select
+              name="publicationType"
+              aria-label="Tipo de publicación"
+              required
+            >
+              <option value="">Selecciona una categoría</option>
+              {PUBLICATION_TYPES.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Fecha de publicación
+            <input name="publicationDate" type="date" required />
+          </label>
+        </div>
+      )}
+      {kind !== "diapositiva" && kind !== "publicacion" && (
         <>
           <div className="field-grid">
             <label>
@@ -126,7 +152,7 @@ export default function MediaUpload({
       <label className="upload-zone">
         <Upload size={28} />
         <strong>
-          {kind === "documento"
+          {kind === "documento" || kind === "publicacion"
             ? "Seleccionar soportes PDF"
             : "Seleccionar imágenes"}
         </strong>
@@ -137,18 +163,17 @@ export default function MediaUpload({
           multiple
           required
           accept={
-            kind === "documento"
+            kind === "documento" || kind === "publicacion"
               ? "application/pdf"
               : ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
           }
         />
       </label>
       <p className="form-help">
-        {kind === "documento"
+        {kind === "documento" || kind === "publicacion"
           ? "Los PDF se entregan como descarga."
           : "Las imágenes se convierten a WebP HD (hasta 4096 px) y se eliminan sus metadatos de ubicación."}{" "}
-        Verifica la autorización para compartir las evidencias antes de
-        cargarlas.
+        Verifica la autorización para compartir los archivos antes de cargarlas.
       </p>
       {error && (
         <div className="notice error" role="alert">

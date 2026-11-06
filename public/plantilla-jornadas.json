@@ -12,8 +12,6 @@
     "weaponsVoluntary": 0,
     "objective": "REEMPLAZAR: objetivo de la jornada",
     "summary": "REEMPLAZAR: resumen operativo y resultados",
-    "pisccGoal": "",
-    "budgetApproved": 0,
-    "budgetExecuted": 0
+    "pisccGoal": ""
   }
 ]

@@ -58,10 +58,10 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
             blur: 25,
             minOpacity: 0.35,
             gradient: {
-              0.2: "#a7d8bb",
-              0.5: "#e4c568",
-              0.8: "#e39151",
-              1: "#b34c38",
+              0.2: "#80BEFF",
+              0.5: "#10A13B",
+              0.8: "#FFD500",
+              1: "#DA1C24",
             },
           },
         ).addTo(map);

@@ -22,6 +22,7 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
   await page.screenshot({
     path: testInfo.outputPath("dashboard-empty.png"),
     fullPage: true,
+    animations: "disabled",
   });
   await page
     .getByRole("button", { name: "Nueva jornada", exact: true })
@@ -49,8 +50,8 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
   await dialog
     .getByLabel("Resumen operativo y resultados")
     .fill("Jornada de desarme, convivencia y participación de jóvenes.");
-  await dialog.getByLabel("Presupuesto aprobado").fill("5000000");
-  await dialog.getByLabel("Presupuesto ejecutado").fill("2000000");
+  await expect(dialog.getByLabel("Presupuesto aprobado")).toHaveCount(0);
+  await expect(dialog.getByLabel("Presupuesto ejecutado")).toHaveCount(0);
   await dialog
     .getByRole("button", { name: "Registrar jornada", exact: true })
     .click();
@@ -79,13 +80,11 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
   })
     .png()
     .toBuffer();
-  await dialog
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: "evidencia.png",
-      mimeType: "image/png",
-      buffer: png,
-    });
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "evidencia.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
   await dialog
     .getByRole("button", { name: "Cargar archivos", exact: true })
     .click();
@@ -122,21 +121,18 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
   await page.locator(".presentation-viewer").focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator(".slide-counter")).toHaveText("2 / 2");
-  await page
-    .getByRole("button", { name: "Control presupuestal", exact: true })
-    .click();
   await expect(
-    page.getByRole("heading", { name: "Seguimiento presupuestal por jornada" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Control presupuestal", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Analítica textual", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Jornadas y actividades", exact: true })
+    .click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Exportar datos" }).click();
   expect((await download).suggestedFilename()).toBe("narino360-jornadas.csv");
-  await page
-    .getByRole("button", { name: "Analítica textual", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Temáticas de convivencia y seguridad" }),
-  ).toBeVisible();
   await page
     .getByRole("button", { name: "Auditoría de accesos", exact: true })
     .click();
@@ -149,6 +145,7 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
   await page.screenshot({
     path: testInfo.outputPath("dashboard-desktop.png"),
     fullPage: true,
+    animations: "disabled",
   });
   expect(errors).toEqual([]);
 });
@@ -180,6 +177,7 @@ test("Invitado consulta desde móvil sin opciones de escritura", async ({
   await page.screenshot({
     path: testInfo.outputPath("dashboard-mobile.png"),
     fullPage: true,
+    animations: "disabled",
   });
   expect(
     await page.evaluate(
@@ -200,5 +198,145 @@ test("Invitado consulta desde móvil sin opciones de escritura", async ({
     .getByRole("button", { name: "Cerrar sesión", exact: true })
     .click();
   await expect(page).toHaveURL(/acceso/);
+  expect(errors).toEqual([]);
+});
+
+test("Observatorio permite publicar, filtrar, descargar y eliminar boletines", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await page.getByRole("button", { name: "Observatorio", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Boletines y productos del observatorio",
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".heading-actions")).toBeHidden();
+  for (const item of [
+    {
+      title: "Boletín semanal de convivencia",
+      type: "Boletín semanal",
+      date: "2026-11-05",
+    },
+    {
+      title: "Balance mensual de seguridad",
+      type: "Boletín mensual",
+      date: "2026-11-01",
+    },
+  ]) {
+    await page
+      .getByRole("button", { name: "Cargar publicación", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Título", { exact: true }).fill(item.title);
+    await dialog
+      .getByLabel("Descripción o fuente")
+      .fill("Publicación de prueba del observatorio");
+    await dialog
+      .getByRole("combobox", { name: "Tipo de publicación", exact: true })
+      .selectOption(item.type);
+    await dialog
+      .getByLabel("Fecha de publicación", { exact: true })
+      .fill(item.date);
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: "boletin.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\n% Producto de prueba\n%%EOF"),
+    });
+    await dialog
+      .getByRole("button", { name: "Cargar archivos", exact: true })
+      .click();
+    await expect(dialog).not.toBeVisible();
+  }
+  await expect(page.locator(".publication-card")).toHaveCount(2);
+  await page
+    .locator(".publication-category")
+    .filter({ hasText: "Boletín semanal" })
+    .click();
+  await expect(page.locator(".publication-card")).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { name: "Boletín semanal de convivencia" }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Buscar publicación", exact: true })
+    .fill("sin coincidencia");
+  await expect(page.locator(".publication-card")).toHaveCount(0);
+  await page
+    .getByRole("textbox", { name: "Buscar publicación", exact: true })
+    .fill("");
+  const download = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Descargar PDF", exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+  await page.getByRole("button", { name: "Restablecer", exact: true }).click();
+  await page
+    .getByLabel("Publicaciones hasta", { exact: true })
+    .fill("2026-11-04");
+  await expect(page.locator(".publication-card")).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { name: "Balance mensual de seguridad" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Restablecer", exact: true }).click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: testInfo.outputPath("observatorio-desktop.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", {
+      name: "Eliminar publicación Boletín semanal de convivencia",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".publication-card")).toHaveCount(1);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Balance mensual de seguridad" }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      page.locator(".sidebar").evaluate((e) => e.getBoundingClientRect().right),
+    )
+    .toBeLessThanOrEqual(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: testInfo.outputPath("observatorio-mobile.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("button", { name: "Cerrar sesión", exact: true })
+    .click();
+  await expect(page).toHaveURL(/acceso/);
+  await page.getByRole("button", { name: "Invitado", exact: true }).click();
+  await page.getByLabel("Nombre", { exact: true }).fill("Consulta");
+  await page.getByLabel("Apellido", { exact: true }).fill("Prueba");
+  await page.getByLabel("Entidad u organización").fill("Pruebas");
+  await page.getByLabel("Cargo o vínculo").fill("Analista");
+  await page
+    .getByRole("button", { name: "Registrar ingreso y continuar" })
+    .click();
+  await page.getByRole("button", { name: "Abrir navegación" }).click();
+  await page.getByRole("button", { name: "Observatorio", exact: true }).click();
+  await expect(page.locator(".publication-card")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Cargar publicación", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".publication-delete")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

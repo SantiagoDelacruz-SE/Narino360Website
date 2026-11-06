@@ -44,12 +44,14 @@ export default function ActivityForm({
         "families",
         "weaponsSeized",
         "weaponsVoluntary",
-        "budgetApproved",
-        "budgetExecuted",
       ];
       for (const name of numbers)
         (data as Record<string, unknown>)[name] = Number(data[name]);
-      const validated = validateActivity(data);
+      const validated = validateActivity({
+        ...data,
+        budgetApproved: activity?.budgetApproved ?? 0,
+        budgetExecuted: activity?.budgetExecuted ?? 0,
+      });
       await api("/api/jornadas", {
         method: activity ? "PUT" : "POST",
         body: JSON.stringify({
@@ -282,30 +284,6 @@ export default function ActivityForm({
             {...field("summary")}
           />
         </label>
-        <div className="form-section-title">Control presupuestal · COP</div>
-        <div className="field-grid">
-          {[
-            ["budgetApproved", "Presupuesto aprobado"],
-            ["budgetExecuted", "Presupuesto ejecutado"],
-          ].map(([key, label]) => (
-            <label key={key}>
-              {label}
-              <input
-                name={key}
-                type="number"
-                step=".01"
-                min="0"
-                max="100000000000000"
-                required
-                value={draft[key] ?? 0}
-                onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-              />
-            </label>
-          ))}
-        </div>
-        <p className="form-help">
-          Si no hay asignación presupuestal registrada, conserva cero.
-        </p>
         {error && (
           <div className="notice error" role="alert">
             {error}

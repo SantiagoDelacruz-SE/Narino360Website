@@ -15,6 +15,7 @@ import {
 import {
   AppError,
   textField,
+  publicationMetadata,
   PROGRAMS,
   MUNICIPALITIES,
   type Asset,
@@ -61,7 +62,9 @@ export async function POST(request: Request) {
     )
       throw new AppError("Selecciona un archivo de hasta 15 MB.");
     const kind = textField(data.get("kind"), "Tipo");
-    if (!["evidencia", "diapositiva", "documento"].includes(kind))
+    if (
+      !["evidencia", "diapositiva", "documento", "publicacion"].includes(kind)
+    )
       throw new AppError("Tipo de archivo no válido.");
     const title = textField(data.get("title"), "Título", 200),
       caption = textField(data.get("caption") || "", "Descripción", 2000, 0);
@@ -85,10 +88,17 @@ export async function POST(request: Request) {
         !db().prepare("SELECT id FROM jornadas WHERE id=?").get(activityId))
     )
       throw new AppError("Jornada asociada no válida.");
+    const metadata =
+      kind === "publicacion"
+        ? publicationMetadata({
+            publicationType: data.get("publicationType"),
+            publicationDate: data.get("publicationDate"),
+          })
+        : {};
     const id = randomUUID(),
       buffer = Buffer.from(await file.arrayBuffer());
     let encoded: Buffer, ext: string;
-    if (kind === "documento") {
+    if (kind === "documento" || kind === "publicacion") {
       if (!buffer.subarray(0, 5).equals(Buffer.from("%PDF-")))
         throw new AppError("Los soportes documentales deben ser PDF.");
       encoded = buffer;
@@ -134,6 +144,7 @@ export async function POST(request: Request) {
       activityId,
       filename,
       createdAt: new Date().toISOString(),
+      ...metadata,
     };
     writeAssets([...readAssets(), asset]);
     createdPath = undefined;

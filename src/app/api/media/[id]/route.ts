@@ -17,10 +17,12 @@ export async function GET(
     return new NextResponse(readFileSync(assetPath(asset.filename)), {
       headers: {
         "Content-Type":
-          asset.kind === "documento" ? "application/pdf" : "image/webp",
+          asset.kind === "documento" || asset.kind === "publicacion"
+            ? "application/pdf"
+            : "image/webp",
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
-        ...(asset.kind === "documento"
+        ...(asset.kind === "documento" || asset.kind === "publicacion"
           ? {
               "Content-Disposition":
                 'attachment; filename="' + asset.filename + '"',

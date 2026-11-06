@@ -101,9 +101,18 @@ export type Activity = ActivityInput & {
   updatedAt: string;
   author: string;
 };
+export const PUBLICATION_TYPES = [
+  "Boletín diario",
+  "Boletín semanal",
+  "Boletín mensual",
+  "Boletín de investigación",
+  "Boletín temático",
+  "Otros productos",
+] as const;
+export type PublicationType = (typeof PUBLICATION_TYPES)[number];
 export type Asset = {
   id: string;
-  kind: "evidencia" | "diapositiva" | "documento";
+  kind: "evidencia" | "diapositiva" | "documento" | "publicacion";
   title: string;
   caption: string;
   municipality: string;
@@ -111,6 +120,8 @@ export type Asset = {
   activityId: number | null;
   filename: string;
   createdAt: string;
+  publicationType?: PublicationType;
+  publicationDate?: string;
 };
 export const REFERENCES = {
   municipalities: 64,
@@ -124,51 +135,6 @@ export const normalize = (s: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-export function themes(
-  activities: Pick<ActivityInput, "summary" | "objective">[],
-) {
-  const groups: Record<string, string[]> = {
-    Convivencia: [
-      "convivencia",
-      "dialogo",
-      "mediacion",
-      "conflicto",
-      "comunidad",
-    ],
-    "Seguridad ciudadana": [
-      "seguridad",
-      "prevencion",
-      "delito",
-      "policia",
-      "proteccion",
-    ],
-    "Seguridad alimentaria": [
-      "alimento",
-      "alimentaria",
-      "donacion",
-      "hambre",
-      "nutricion",
-    ],
-    "Construcción de paz": ["paz", "reconciliacion", "cultivo", "territorio"],
-    Desarme: ["arma", "desarme", "incautacion", "voluntaria"],
-    "Niñez y juventud": [
-      "joven",
-      "juventud",
-      "infancia",
-      "nino",
-      "adolescente",
-    ],
-  };
-  return Object.entries(groups)
-    .map(([name, words]) => ({
-      name,
-      count: activities.filter((a) => {
-        const text = normalize(a.summary + " " + a.objective);
-        return words.some((w) => text.includes(w));
-      }).length,
-    }))
-    .sort((a, b) => b.count - a.count);
-}
 export function parseBulletin(text: string): Partial<ActivityInput> {
   const t = normalize(text);
   const result: Partial<ActivityInput> = { summary: text.slice(0, 8000) };
@@ -268,8 +234,11 @@ export function validateActivity(value: unknown): ActivityInput {
     throw new AppError(
       "Las coordenadas deben estar en el entorno geográfico de Nariño (latitud 0 a 3,5; longitud −79,5 a −75,5). Verifica su ubicación en el mapa.",
     );
-  const budgetApproved = num("budgetApproved", 1e14, false),
-    budgetExecuted = num("budgetExecuted", 1e14, false);
+  // Legacy values remain readable; new journeys no longer require budget fields.
+  const budgetApproved =
+      a.budgetApproved === undefined ? 0 : num("budgetApproved", 1e14, false),
+    budgetExecuted =
+      a.budgetExecuted === undefined ? 0 : num("budgetExecuted", 1e14, false);
   if (budgetExecuted > budgetApproved)
     throw new AppError(
       "La ejecución no puede superar el presupuesto aprobado.",
@@ -297,4 +266,29 @@ export function passwordField(value: unknown): string {
   if (typeof value !== "string" || value.length < 1 || value.length > 128)
     throw new AppError("Contraseña no válida.");
   return value;
+}
+
+export function publicationMetadata(value: {
+  publicationType: unknown;
+  publicationDate: unknown;
+}) {
+  const publicationType = textField(
+    value.publicationType,
+    "Tipo de publicación",
+    80,
+  ) as PublicationType;
+  if (!PUBLICATION_TYPES.includes(publicationType))
+    throw new AppError("Tipo de publicación no válido.");
+  const publicationDate = textField(
+    value.publicationDate,
+    "Fecha de publicación",
+    10,
+  );
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(publicationDate) ||
+    !Number.isFinite(Date.parse(publicationDate)) ||
+    new Date(publicationDate).toISOString().slice(0, 10) !== publicationDate
+  )
+    throw new AppError("Fecha de publicación no válida.");
+  return { publicationType, publicationDate };
 }

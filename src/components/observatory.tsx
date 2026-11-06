@@ -8,7 +8,6 @@ import {
   Activity as ActivityIcon,
   ArrowDownToLine,
   ArrowRight,
-  BarChart3,
   Building2,
   CalendarDays,
   Check,
@@ -32,7 +31,6 @@ import {
   Trash2,
   Users,
   Utensils,
-  Wallet,
   X,
   Pencil,
   KeyRound,
@@ -42,16 +40,16 @@ import {
   PROGRAMS,
   REFERENCES,
   normalize,
-  themes,
   type Activity,
   type Asset,
   type Identity,
 } from "@/lib/domain";
-import { api, number, money, csvDownload } from "./api";
+import { api, number, csvDownload } from "./api";
 import Modal from "./modal";
 import ActivityForm from "./activity-form";
 import MediaUpload from "./media-upload";
 import Presentation from "./presentation";
+import Publications from "./publications";
 const TerritoryMap = dynamic(() => import("./territory-map"), {
   ssr: false,
   loading: () => <div className="map-loading">Preparando cartografía…</div>,
@@ -66,8 +64,7 @@ const navigation = [
     label: "Presentación estratégica",
     icon: PresentationIcon,
   },
-  { id: "analitica", label: "Analítica textual", icon: BarChart3 },
-  { id: "presupuesto", label: "Control presupuestal", icon: Wallet },
+  { id: "observatorio", label: "Observatorio", icon: FileText },
 ];
 type Tab = (typeof navigation)[number]["id"] | "auditoria";
 type ModalState =
@@ -158,10 +155,8 @@ export default function Observatory({
           people: t.people + a.people,
           families: t.families + a.families,
           weapons: t.weapons + a.weaponsSeized + a.weaponsVoluntary,
-          approved: t.approved + a.budgetApproved,
-          executed: t.executed + a.budgetExecuted,
         }),
-        { people: 0, families: 0, weapons: 0, approved: 0, executed: 0 },
+        { people: 0, families: 0, weapons: 0 },
       ),
     [filtered],
   );
@@ -219,8 +214,6 @@ export default function Observatory({
         Meta_PISCC: a.pisccGoal,
         Objetivo: a.objective,
         Resumen: a.summary,
-        Presupuesto_aprobado_COP: a.budgetApproved,
-        Ejecutado_COP: a.budgetExecuted,
         Autor: a.author,
         Creacion: a.createdAt,
         Actualizacion: a.updatedAt,
@@ -375,7 +368,7 @@ export default function Observatory({
                   : "Información territorial para acompañar la gestión institucional."}
               </p>
             </div>
-            <div className="heading-actions">
+            <div className="heading-actions" hidden={tab === "observatorio"}>
               <button className="button secondary" onClick={exportRows}>
                 <ArrowDownToLine size={16} />
                 Exportar datos
@@ -416,69 +409,74 @@ export default function Observatory({
               </button>
             </div>
           )}
-          {tab !== "presentacion" && tab !== "auditoria" && (
-            <section className="filter-bar" aria-label="Filtros de información">
-              <div className="filter-label">
-                <Filter size={16} />
-                <span>Filtrar por</span>
-              </div>
-              <label>
-                <span className="sr-only">Programa</span>
-                <select
-                  value={program}
-                  onChange={(e) => setProgram(e.target.value)}
-                >
-                  <option value="">Todos los programas</option>
-                  {PROGRAMS.map((p) => (
-                    <option key={p}>{p}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span className="sr-only">Municipio</span>
-                <select
-                  value={municipality}
-                  onChange={(e) => setMunicipality(e.target.value)}
-                >
-                  <option value="">Todos los municipios</option>
-                  {MUNICIPALITIES.map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="date-filter">
-                <CalendarDays size={15} />
-                <span className="sr-only">Desde</span>
-                <input
-                  type="date"
-                  title="Desde"
-                  value={since}
-                  onChange={(e) => setSince(e.target.value)}
-                  aria-label="Fecha inicial"
-                />
-              </label>
-              <span className="date-divider">—</span>
-              <label className="date-filter">
-                <span className="sr-only">Hasta</span>
-                <input
-                  type="date"
-                  title="Hasta"
-                  min={since}
-                  value={until}
-                  onChange={(e) => setUntil(e.target.value)}
-                  aria-label="Fecha final"
-                />
-              </label>
-              <button
-                className="text-button"
-                onClick={reset}
-                disabled={!filtersActive}
+          {tab !== "presentacion" &&
+            tab !== "auditoria" &&
+            tab !== "observatorio" && (
+              <section
+                className="filter-bar"
+                aria-label="Filtros de información"
               >
-                Restablecer
-              </button>
-            </section>
-          )}
-          {since && until && since > until && (
+                <div className="filter-label">
+                  <Filter size={16} />
+                  <span>Filtrar por</span>
+                </div>
+                <label>
+                  <span className="sr-only">Programa</span>
+                  <select
+                    value={program}
+                    onChange={(e) => setProgram(e.target.value)}
+                  >
+                    <option value="">Todos los programas</option>
+                    {PROGRAMS.map((p) => (
+                      <option key={p}>{p}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="sr-only">Municipio</span>
+                  <select
+                    value={municipality}
+                    onChange={(e) => setMunicipality(e.target.value)}
+                  >
+                    <option value="">Todos los municipios</option>
+                    {MUNICIPALITIES.map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="date-filter">
+                  <CalendarDays size={15} />
+                  <span className="sr-only">Desde</span>
+                  <input
+                    type="date"
+                    title="Desde"
+                    value={since}
+                    onChange={(e) => setSince(e.target.value)}
+                    aria-label="Fecha inicial"
+                  />
+                </label>
+                <span className="date-divider">—</span>
+                <label className="date-filter">
+                  <span className="sr-only">Hasta</span>
+                  <input
+                    type="date"
+                    title="Hasta"
+                    min={since}
+                    value={until}
+                    onChange={(e) => setUntil(e.target.value)}
+                    aria-label="Fecha final"
+                  />
+                </label>
+                <button
+                  className="text-button"
+                  onClick={reset}
+                  disabled={!filtersActive}
+                >
+                  Restablecer
+                </button>
+              </section>
+            )}
+          {tab !== "observatorio" && since && until && since > until && (
             <div className="notice error">
               La fecha inicial es posterior a la fecha final. Ajusta el rango de
               consulta.
@@ -582,7 +580,7 @@ export default function Observatory({
                       background:
                         "conic-gradient(var(--green) " +
                         (covered / 64) * 100 +
-                        "%, #eef1ec 0)",
+                        "%, var(--border) 0)",
                     }}
                   >
                     <div>
@@ -889,193 +887,14 @@ export default function Observatory({
               onError={setError}
             />
           )}
-          {tab === "analitica" && (
-            <>
-              <div className="section-heading">
-                <div>
-                  <h2>Lo que cuentan las jornadas</h2>
-                  <p>
-                    Temáticas recurrentes en objetivos y resúmenes operativos.
-                  </p>
-                </div>
-                <span className="subtle-tag">
-                  {filtered.length} TEXTOS ANALIZADOS
-                </span>
-              </div>
-              <div className="analysis-grid">
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Temáticas de convivencia y seguridad</h2>
-                  </div>
-                  <div className="theme-bars">
-                    {themes(filtered).map((t) => (
-                      <div key={t.name}>
-                        <div>
-                          <span>{t.name}</span>
-                          <strong>{t.count} jornadas</strong>
-                        </div>
-                        <div className="bar-track">
-                          <span
-                            style={{
-                              width:
-                                (filtered.length
-                                  ? (t.count / filtered.length) * 100
-                                  : 0) + "%",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="panel-footnote">
-                    Clasificación por diccionario de términos. Una jornada puede
-                    pertenecer a varias temáticas. No determina riesgos ni
-                    verifica hechos.
-                  </p>
-                </section>
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Distribución por programa</h2>
-                  </div>
-                  <div className="theme-bars">
-                    {PROGRAMS.map((p, i) => (
-                      <div key={p}>
-                        <div>
-                          <span>{p}</span>
-                          <strong>
-                            {filtered.filter((a) => a.program === p).length}
-                          </strong>
-                        </div>
-                        <div className={"bar-track bar-" + i}>
-                          <span
-                            style={{
-                              width:
-                                (filtered.length
-                                  ? (filtered.filter((a) => a.program === p)
-                                      .length /
-                                      filtered.length) *
-                                    100
-                                  : 0) + "%",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </div>
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>Textos de origen</h2>
-                </div>
-                {filtered.slice(0, 30).map((a) => (
-                  <div key={a.id} className="text-record">
-                    <span className="eyebrow">
-                      {a.municipality} · {a.program}
-                    </span>
-                    <h3>{a.title}</h3>
-                    <p>{a.summary}</p>
-                  </div>
-                ))}
-                {!filtered.length && (
-                  <Empty
-                    icon={BarChart3}
-                    title="Sin textos para analizar"
-                    text="Los objetivos y resúmenes de las jornadas alimentan este análisis automáticamente."
-                  />
-                )}
-              </section>
-            </>
-          )}
-          {tab === "presupuesto" && (
-            <>
-              <div className="budget-grid">
-                <Kpi
-                  icon={Wallet}
-                  label="Presupuesto aprobado"
-                  value={money(totals.approved)}
-                  note="Suma de jornadas consultadas"
-                  color="green"
-                />
-                <Kpi
-                  icon={ActivityIcon}
-                  label="Presupuesto ejecutado"
-                  value={money(totals.executed)}
-                  note={
-                    totals.approved
-                      ? ((totals.executed / totals.approved) * 100).toFixed(1) +
-                        "% de ejecución"
-                      : "Sin presupuesto registrado"
-                  }
-                  color="amber"
-                />
-                <Kpi
-                  icon={Wallet}
-                  label="Saldo por ejecutar"
-                  value={money(totals.approved - totals.executed)}
-                  note="Aprobado menos ejecutado"
-                  color="blue"
-                />
-              </div>
-              <section className="panel">
-                <div className="panel-heading">
-                  <div>
-                    <h2>Seguimiento presupuestal por jornada</h2>
-                    <p>Valores reportados en pesos colombianos · COP</p>
-                  </div>
-                </div>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Jornada</th>
-                        <th>Programa</th>
-                        <th>Aprobado</th>
-                        <th>Ejecutado</th>
-                        <th>Saldo</th>
-                        <th>Ejecución</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((a) => (
-                        <tr key={a.id}>
-                          <td>
-                            <button
-                              className="table-title"
-                              onClick={() =>
-                                setModal({ type: "detail", activity: a })
-                              }
-                            >
-                              {a.title}
-                            </button>
-                            <small>{a.municipality}</small>
-                          </td>
-                          <td>{a.program}</td>
-                          <td>{money(a.budgetApproved)}</td>
-                          <td>{money(a.budgetExecuted)}</td>
-                          <td>{money(a.budgetApproved - a.budgetExecuted)}</td>
-                          <td>
-                            {a.budgetApproved
-                              ? (
-                                  (a.budgetExecuted / a.budgetApproved) *
-                                  100
-                                ).toFixed(1) + "%"
-                              : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {!filtered.length && (
-                    <Empty
-                      icon={Wallet}
-                      title="Sin ejecución presupuestal registrada"
-                      text="Registra los valores aprobados y ejecutados en el formulario de cada jornada."
-                    />
-                  )}
-                </div>
-              </section>
-            </>
+          {tab === "observatorio" && (
+            <Publications
+              assets={assets}
+              canEdit={canEdit}
+              onUpload={() => setModal({ type: "upload", kind: "publicacion" })}
+              onRefresh={refresh}
+              onError={setError}
+            />
           )}
           {tab === "auditoria" && user.role === "Administrador" && <Audit />}
           <footer className="workspace-footer">
@@ -1098,11 +917,13 @@ export default function Observatory({
       {modal?.type === "upload" && (
         <Modal
           title={
-            modal.kind === "diapositiva"
-              ? "Cargar diapositivas"
-              : modal.kind === "documento"
-                ? "Cargar soportes documentales"
-                : "Cargar evidencias fotográficas"
+            modal.kind === "publicacion"
+              ? "Cargar publicación del observatorio"
+              : modal.kind === "diapositiva"
+                ? "Cargar diapositivas"
+                : modal.kind === "documento"
+                  ? "Cargar soportes documentales"
+                  : "Cargar evidencias fotográficas"
           }
           onClose={() => setModal(null)}
         >
@@ -1306,10 +1127,6 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
           </div>
         ))}
       </div>
-      <p>
-        Presupuesto aprobado: <strong>{money(a.budgetApproved)}</strong> ·
-        Ejecutado: <strong>{money(a.budgetExecuted)}</strong>
-      </p>
       <p className="form-help">
         Registrado por {a.author}. Última actualización: {a.updatedAt} UTC.
       </p>

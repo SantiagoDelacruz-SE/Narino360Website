@@ -43,9 +43,6 @@ Los cambios de contraseña revocan las demás sesiones del funcionario.
   filas antes de escribir; no sustituye ni deduplica registros existentes.
 - Extracción por patrones de fecha (AAAA-MM-DD o DD/MM/AAAA), municipio, programa,
   personas, familias, armas y coordenadas explícitas. Requiere revisión humana.
-- Analítica por diccionario de temáticas sobre objetivos y resúmenes. Cuenta
-  jornadas con términos coincidentes; no realiza análisis predictivo ni verifica
-  hechos. Una jornada puede contar en varias temáticas.
 - Mural HD con selector de 2 a 4 columnas en escritorio, vista ampliada y descarga.
   En pantallas pequeñas se adapta a dos columnas. Carga de JPG, PNG o WebP: hasta
   20 imágenes por operación, 15 MB y 40 megapíxeles por archivo. Conversión WebP de
@@ -54,8 +51,14 @@ Los cambios de contraseña revocan las demás sesiones del funcionario.
   descripciones, miniaturas, orden editable, eliminación, teclado y pantalla
   completa cuando el navegador la permite. Avance manual. Sin archivos muestra
   plantillas expresamente identificadas, que no son material oficial.
-- Presupuesto aprobado, ejecutado y saldo por jornada, expresado en COP. La
-  ejecución no puede superar el valor aprobado.
+- Observatorio de publicaciones: boletines diarios, semanales, mensuales, de
+  investigación, temáticos y otros productos institucionales. Carga de PDF con
+  título, descripción, categoría y fecha de publicación; búsqueda, filtros por
+  categoría y fechas, orden cronológico y descarga autenticada. Los funcionarios
+  cargan y eliminan; los invitados consultan y descargan.
+- Paleta institucional: amarillo `#FFD500` y verde `#10A13B`, con azul claro
+  `#80BEFF`, azul `#0071AC`, café `#896633`, rojo `#DA1C24`, negro y blanco
+  como colores secundarios.
 - Auditoría administrativa de accesos y cambios, y registro de procedencia de
   invitados. Consulta de los últimos 500 eventos, con exportación CSV de auditoría.
 
@@ -69,6 +72,11 @@ coordenadas reales. No incluye datos de demostración importables por accidente.
 En **Mural de evidencias** carga fotos o PDF y, opcionalmente, asócialos a una
 jornada, municipio y programa. Los filtros de fecha de archivos usan la fecha de
 carga; los de jornadas usan la fecha de ejecución.
+
+En **Observatorio → Cargar publicación** sube el PDF, elige uno de los seis tipos
+e indica la fecha de publicación. Los filtros usan esa fecha, independientemente
+del día en que se cargó el archivo. Los soportes del mural y las diapositivas
+conservan sus módulos y no se mezclan con el catálogo de publicaciones.
 
 En **Presentación estratégica → Cargar diapositivas** sube imágenes, preferiblemente
 16:9. Si tu presentación está en PowerPoint o PDF, exporta primero sus páginas a

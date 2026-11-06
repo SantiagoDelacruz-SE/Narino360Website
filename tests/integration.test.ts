@@ -10,7 +10,6 @@ import {
   MUNICIPALITIES,
   validateActivity,
   parseBulletin,
-  themes,
 } from "../src/lib/domain";
 const temp = mkdtempSync(join(tmpdir(), "narino360-api-"));
 const origin = "http://127.0.0.1:3138",
@@ -145,7 +144,7 @@ after(async () => {
   db?.db().close();
   rmSync(temp, { recursive: true, force: true });
 });
-test("Catálogo de 64 municipios únicos, extracción y analítica sin inventar datos", () => {
+test("Catálogo de 64 municipios únicos y extracción de reportes sin inventar datos", () => {
   assert.equal(MUNICIPALITIES.length, 64);
   assert.equal(new Set(MUNICIPALITIES).size, 64);
   const p = parseBulletin(
@@ -164,10 +163,6 @@ test("Catálogo de 64 municipios únicos, extracción y analítica sin inventar 
   assert.equal(
     parseBulletin("Gobernación de Nariño. Municipio: Pasto.").municipality,
     "Pasto",
-  );
-  assert.ok(
-    themes([validateActivity(activity)]).find((t) => t.name === "Desarme")!
-      .count === 1,
   );
   assert.throws(() => validateActivity({ ...activity, date: "2026-02-31" }));
   assert.throws(() =>
@@ -470,4 +465,107 @@ test("Los soportes PDF se descargan con autenticación y no se ejecutan en el vi
     (await request("/api/media", "DELETE", { id }, admin)).status,
     200,
   );
+});
+
+test("El Observatorio guarda las seis categorías y permite descargas privadas de PDF", async () => {
+  const { PUBLICATION_TYPES } = await import("../src/lib/domain");
+  const login = await request("/api/auth", "POST", {
+    action: "guest",
+    firstName: "Consulta",
+    lastName: "Observatorio",
+    entity: "Pruebas",
+    position: "Invitado",
+  });
+  const cookie = login.headers.get("set-cookie")!.split(";")[0];
+  const ids: string[] = [];
+  for (const category of PUBLICATION_TYPES) {
+    const data = new FormData();
+    data.set("kind", "publicacion");
+    data.set("title", category + " de prueba");
+    data.set("caption", "Producto institucional de prueba");
+    data.set("publicationType", category);
+    data.set("publicationDate", "2026-11-05");
+    data.set(
+      "file",
+      new Blob(["%PDF-1.4\n% Prueba\n%%EOF"], { type: "application/pdf" }),
+      "boletin.pdf",
+    );
+    assert.equal(
+      (await request("/api/media", "POST", data, cookie)).status,
+      403,
+    );
+    const result = await request("/api/media", "POST", data, editor);
+    assert.equal(result.status, 201, await result.clone().text());
+    const { asset } = await result.json();
+    assert.equal(asset.publicationType, category);
+    assert.equal(asset.publicationDate, "2026-11-05");
+    ids.push(asset.id);
+    const download = await request(
+      "/api/media/" + asset.id,
+      "GET",
+      undefined,
+      cookie,
+    );
+    assert.equal(download.status, 200);
+    assert.equal(download.headers.get("content-type"), "application/pdf");
+    assert.match(download.headers.get("content-disposition")!, /^attachment;/);
+    assert.equal((await request("/api/media/" + asset.id)).status, 401);
+  }
+  const { assets } = await (
+    await request("/api/media", "GET", undefined, cookie)
+  ).json();
+  assert.equal(
+    assets.filter((a: { kind: string }) => a.kind === "publicacion").length,
+    6,
+  );
+  const { readAssets } = await import("../src/lib/media");
+  assert.equal(readAssets().filter((a) => a.kind === "publicacion").length, 6);
+  for (const id of ids)
+    assert.equal(
+      (await request("/api/media", "DELETE", { id }, editor)).status,
+      200,
+    );
+});
+
+test("El Observatorio rechaza categorías, fechas y archivos no válidos", async () => {
+  const form = (
+    category = "Boletín diario",
+    date = "2026-11-05",
+    pdf = true,
+  ) => {
+    const data = new FormData();
+    data.set("kind", "publicacion");
+    data.set("title", "Validación de prueba");
+    data.set("publicationType", category);
+    data.set("publicationDate", date);
+    data.set(
+      "file",
+      new Blob([pdf ? "%PDF-1.4\n%%EOF" : "not a PDF"]),
+      "boletin.pdf",
+    );
+    return data;
+  };
+  for (const data of [
+    form("Anual"),
+    form(""),
+    form("Boletín diario", "2026-02-31"),
+    form("Boletín diario", ""),
+    form("Boletín diario", "2026-11-05", false),
+  ])
+    assert.equal(
+      (await request("/api/media", "POST", data, editor)).status,
+      400,
+    );
+  assert.equal(
+    (await request("/api/media", "GET", undefined, admin)).status,
+    200,
+  );
+});
+
+test("Las jornadas nuevas no necesitan campos presupuestales", () => {
+  const { budgetApproved, budgetExecuted, ...current } = activity;
+  assert.ok(budgetApproved > 0 && budgetExecuted > 0);
+  const validated = validateActivity(current);
+  assert.equal(validated.budgetApproved, 0);
+  assert.equal(validated.budgetExecuted, 0);
 });
