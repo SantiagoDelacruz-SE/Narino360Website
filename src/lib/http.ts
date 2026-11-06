@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { COOKIE, sessionIdentity } from "./auth";
-import { AppError, type Identity } from "./domain";
+import { AppError, canEditContent, type Identity } from "./domain";
 export async function identity(): Promise<Identity> {
   const user = sessionIdentity((await cookies()).get(COOKIE)?.value);
   if (!user) throw new AppError("La sesión expiró. Ingresa nuevamente.", 401);
@@ -9,8 +9,11 @@ export async function identity(): Promise<Identity> {
 }
 export async function editor() {
   const user = await identity();
-  if (user.role === "Invitado")
-    throw new AppError("Solo funcionarios pueden realizar cambios.", 403);
+  if (!canEditContent(user.role))
+    throw new AppError(
+      "Solo administradores y editores pueden realizar cambios.",
+      403,
+    );
   return user;
 }
 export function sameOrigin(request: Request) {

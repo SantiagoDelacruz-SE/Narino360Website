@@ -71,7 +71,15 @@ export const MUNICIPALITIES = [
   "Yacuanquer",
   "Pasto",
 ] as const;
-export type Role = "Administrador" | "Editor" | "Invitado";
+export const ACCOUNT_ROLES = ["Administrador", "Editor", "Consulta"] as const;
+export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+export type Role = AccountRole | "Invitado";
+export function isAccountRole(value: unknown): value is AccountRole {
+  return ACCOUNT_ROLES.some((role) => role === value);
+}
+export function canEditContent(role: Role) {
+  return role === "Administrador" || role === "Editor";
+}
 export type Identity = {
   id: number;
   name: string;

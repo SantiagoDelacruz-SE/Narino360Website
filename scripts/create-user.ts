@@ -1,10 +1,11 @@
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
 import { createUser } from "../src/lib/auth";
+import { isAccountRole } from "../src/lib/domain";
 const [username, name, role = "Administrador"] = process.argv.slice(2);
-if (!username || !name || !["Administrador", "Editor"].includes(role)) {
+if (!username || !name || !isAccountRole(role)) {
   console.error(
-    'Uso: npm run user:create -- usuario "Nombre completo" [Administrador|Editor]',
+    'Uso: npm run user:create -- usuario "Nombre completo" [Administrador|Editor|Consulta]',
   );
   process.exit(1);
 }
@@ -40,7 +41,8 @@ async function main() {
     const confirmation = await ask("Confirmar contraseña: ");
     if (password !== confirmation)
       throw new Error("Las contraseñas no coinciden.");
-    createUser(username, name, password, role as "Administrador" | "Editor");
+    if (!isAccountRole(role)) throw new Error("Rol no válido.");
+    createUser(username, name, password, role);
     console.log("Cuenta creada. Ya puedes iniciar sesión en /acceso.");
   } catch (e) {
     console.error((e as Error).message);

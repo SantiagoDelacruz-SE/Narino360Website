@@ -40,6 +40,7 @@ import {
   PROGRAMS,
   REFERENCES,
   normalize,
+  canEditContent,
   type Activity,
   type Asset,
   type Identity,
@@ -107,7 +108,7 @@ export default function Observatory({
     [toast, setToast] = useState(""),
     [error, setError] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
-  const canEdit = user.role !== "Invitado";
+  const canEdit = canEditContent(user.role);
   useEffect(() => {
     const update = () => {
       const value = window.location.hash.slice(1);
@@ -1164,6 +1165,13 @@ function Account({ user }: { user: Identity }) {
           </p>
         </div>
       </div>
+      {user.role === "Consulta" && (
+        <div className="notice">
+          Tu cuenta es de solo lectura. Puedes consultar el tablero, el mapa,
+          las jornadas, las evidencias, la presentación y las publicaciones,
+          descargar archivos y cambiar tu contraseña.
+        </div>
+      )}
       {user.role === "Invitado" ? (
         <div className="notice">
           Tu acceso permite consultar el observatorio. Solicita una cuenta
@@ -1347,11 +1355,18 @@ function UserManagement() {
           </label>
           <label>
             Rol
-            <select name="role">
+            <select name="role" aria-label="Rol">
               <option>Editor</option>
+              <option value="Consulta">Consulta (solo lectura)</option>
               <option>Administrador</option>
             </select>
           </label>
+          <p className="form-help">
+            Consulta: acceso con credenciales para el gobernador, secretarios y
+            otros funcionarios que solo necesitan visualizar la información.
+            Editor: gestión de jornadas y archivos. Administrador: gestión
+            completa y creación de cuentas.
+          </p>
           <label>
             Contraseña inicial
             <input

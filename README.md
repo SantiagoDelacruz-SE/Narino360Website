@@ -26,8 +26,28 @@ npm run user:create -- editor "Nombre del funcionario" Editor
 ```
 
 Los invitados ingresan por `/acceso` registrando nombre, apellido, entidad y cargo.
-No pueden modificar información. Los editores cargan y editan jornadas y archivos.
-El administrador también crea usuarios, consulta la auditoría y elimina jornadas.
+No pueden modificar información. Las cuentas institucionales ingresan como
+**Funcionario**, con estos roles:
+
+| Rol           | Permisos                                                                                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consulta      | Ver tablero, mapa, jornadas, evidencias, presentación y publicaciones; filtrar, exportar y descargar. Cuenta con credenciales para el gobernador, secretarios y otros funcionarios que solo necesitan consultar. |
+| Editor        | Consultar y gestionar jornadas y archivos.                                                                                                                                                                       |
+| Administrador | Gestión completa, creación de cuentas, auditoría y eliminación de jornadas.                                                                                                                                      |
+
+Solo el administrador puede crear cuentas desde **Mi cuenta y acceso → Gestionar
+cuentas institucionales**, seleccionando **Consulta (solo lectura)** cuando
+corresponda. También puedes crear una cuenta de consulta desde terminal:
+
+```bash
+npm run user:create -- gobernador "Nombre del gobernador" Consulta
+```
+
+Las cuentas Consulta pueden cambiar su propia contraseña. Sus accesos quedan en
+la auditoría y el servidor rechaza las modificaciones de contenidos, incluso si
+se intentan fuera de la interfaz. El esquema de usuarios se actualiza al abrir la
+base de datos por primera vez tras el despliegue, preservando IDs, hashes,
+roles anteriores y sesiones. Esta actualización no cambia los archivos cargados.
 Los cambios de contraseña revocan las demás sesiones del funcionario.
 
 ## Funcionalidades

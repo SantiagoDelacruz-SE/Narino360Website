@@ -2,21 +2,29 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { Activity, ActivityInput } from "./domain";
+import { migrateUserRoles } from "./migrations";
 export const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let connection: DatabaseSync | undefined;
 export function db() {
   if (connection) return connection;
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-  connection = new DatabaseSync(path.join(dataDir, "observatorio.sqlite"));
-  connection.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
- CREATE TABLE IF NOT EXISTS usuarios(id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('Administrador','Editor')), active INTEGER NOT NULL DEFAULT 1);
+  const opened = new DatabaseSync(path.join(dataDir, "observatorio.sqlite"));
+  try {
+    opened.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
+ CREATE TABLE IF NOT EXISTS usuarios(id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('Administrador','Editor','Consulta')), active INTEGER NOT NULL DEFAULT 1);
  CREATE TABLE IF NOT EXISTS registro_invitados(id INTEGER PRIMARY KEY, nombre TEXT NOT NULL, apellido TEXT NOT NULL, entidad TEXT NOT NULL, cargo TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
  CREATE TABLE IF NOT EXISTS sesiones(token_hash TEXT PRIMARY KEY, user_id INTEGER REFERENCES usuarios(id), guest_id INTEGER REFERENCES registro_invitados(id), expires_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS registro_accesos_usuarios(id INTEGER PRIMARY KEY, actor TEXT NOT NULL, role TEXT NOT NULL, event TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')));
  CREATE TABLE IF NOT EXISTS intentos_login(username TEXT PRIMARY KEY, attempts INTEGER NOT NULL, reset_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS jornadas(id INTEGER PRIMARY KEY, payload TEXT NOT NULL, author TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
  `);
-  return connection;
+    migrateUserRoles(opened);
+    connection = opened;
+    return connection;
+  } catch (error) {
+    opened.close();
+    throw error;
+  }
 }
 export function audit(actor: string, role: string, event: string, detail = "") {
   db()

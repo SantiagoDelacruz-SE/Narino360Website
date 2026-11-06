@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "user:create": "tsx scripts/create-user.ts",
-    "test": "tsx --test tests/integration.test.ts",
+    "test": "tsx --test tests/integration.test.ts tests/migrations.test.ts",
     "test:ui": "playwright test"
   },
   "dependencies": {

@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { db, audit } from "@/lib/db";
 import { createUser } from "@/lib/auth";
 import { body, identity, sameOrigin, errorResponse } from "@/lib/http";
-import { AppError, textField, passwordField } from "@/lib/domain";
+import {
+  AppError,
+  textField,
+  passwordField,
+  isAccountRole,
+} from "@/lib/domain";
 export const runtime = "nodejs";
 export async function GET() {
   try {
@@ -28,8 +33,7 @@ export async function POST(request: Request) {
       throw new AppError("Acceso reservado al administrador.", 403);
     const v = await body(request);
     const role = v.role;
-    if (role !== "Administrador" && role !== "Editor")
-      throw new AppError("Rol no válido.");
+    if (!isAccountRole(role)) throw new AppError("Rol no válido.");
     if (
       db()
         .prepare("SELECT id FROM usuarios WHERE username=?")

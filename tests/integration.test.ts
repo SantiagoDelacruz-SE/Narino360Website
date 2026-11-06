@@ -714,3 +714,179 @@ test("Reintentos simultáneos con el mismo identificador guardan una sola diapos
     200,
   );
 });
+
+test("Consulta usa credenciales, lee contenidos y cambia su contraseña, sin permisos de gestión", async () => {
+  const account = {
+    username: "gobernador-prueba",
+    name: "Gobernador de prueba",
+    role: "Consulta",
+    password,
+  };
+  assert.equal(
+    (await request("/api/usuarios", "POST", account, admin)).status,
+    201,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/usuarios",
+        "POST",
+        { ...account, username: "rol-invalido", role: "Superusuario" },
+        admin,
+      )
+    ).status,
+    400,
+  );
+  const cookie = await login(account.username);
+  const otherSession = await login(account.username);
+  assert.equal(
+    (await (await request("/api/auth", "GET", undefined, cookie)).json()).user
+      .role,
+    "Consulta",
+  );
+  assert.equal(
+    (await request("/api/jornadas", "POST", activity, admin)).status,
+    201,
+  );
+  const activities = (
+    await (await request("/api/jornadas", "GET", undefined, cookie)).json()
+  ).activities;
+  const id = activities[0].id;
+  const png = await sharp({
+    create: { width: 640, height: 360, channels: 3, background: "#10A13B" },
+  })
+    .png()
+    .toBuffer();
+  const mediaForm = (kind: string) => {
+    const form = new FormData();
+    form.set("kind", kind);
+    form.set("title", "Contenido para consulta");
+    if (kind === "publicacion") {
+      form.set("publicationType", "Boletín diario");
+      form.set("publicationDate", "2026-11-06");
+    }
+    form.set(
+      "file",
+      kind === "publicacion" || kind === "documento"
+        ? new Blob(["%PDF-1.4\n%%EOF"], { type: "application/pdf" })
+        : new Blob([new Uint8Array(png)], { type: "image/png" }),
+      "archivo",
+    );
+    return form;
+  };
+  const assets = [];
+  for (const kind of ["diapositiva", "publicacion"]) {
+    const saved = await request("/api/media", "POST", mediaForm(kind), admin);
+    assert.equal(saved.status, 201);
+    assets.push((await saved.json()).asset);
+  }
+  assert.equal(
+    (await request("/api/media", "GET", undefined, cookie)).status,
+    200,
+  );
+  for (const asset of assets) {
+    const download = await request(
+      "/api/media/" + asset.id,
+      "GET",
+      undefined,
+      cookie,
+    );
+    assert.equal(download.status, 200);
+    assert.ok((await download.arrayBuffer()).byteLength > 0);
+  }
+  assert.equal(
+    (
+      await request(
+        "/api/media/" + assets[0].id + "?size=thumbnail",
+        "GET",
+        undefined,
+        cookie,
+      )
+    ).status,
+    200,
+  );
+  for (const [path, method, data] of [
+    ["/api/jornadas", "POST", activity],
+    ["/api/jornadas", "POST", [activity]],
+    ["/api/jornadas", "PUT", { ...activity, id }],
+    ["/api/jornadas", "DELETE", { id }],
+    ["/api/media", "PUT", { order: [assets[0].id] }],
+    ["/api/media", "DELETE", { id: assets[0].id }],
+    ["/api/usuarios", "GET", undefined],
+    [
+      "/api/usuarios",
+      "POST",
+      { ...account, username: "auto-administrador", role: "Administrador" },
+    ],
+    ["/api/auditoria", "GET", undefined],
+  ] as const)
+    assert.equal(
+      (await request(path, method, data, cookie)).status,
+      403,
+      method + " " + path,
+    );
+  for (const kind of ["diapositiva", "evidencia", "documento", "publicacion"])
+    assert.equal(
+      (await request("/api/media", "POST", mediaForm(kind), cookie)).status,
+      403,
+    );
+  const next = randomBytes(20).toString("hex");
+  const changed = await request(
+    "/api/auth",
+    "POST",
+    { action: "password", current: password, next },
+    cookie,
+  );
+  assert.equal(changed.status, 200);
+  const renewed = changed.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(
+    (await request("/api/auth", "GET", undefined, cookie)).status,
+    401,
+  );
+  assert.equal(
+    (await request("/api/auth", "GET", undefined, otherSession)).status,
+    401,
+  );
+  assert.equal(
+    (await request("/api/jornadas", "GET", undefined, renewed)).status,
+    200,
+  );
+  const newLogin = await login(account.username, next);
+  assert.equal(
+    (await request("/api/media", "DELETE", { id: assets[0].id }, newLogin))
+      .status,
+    403,
+  );
+  const audit = (
+    await (await request("/api/auditoria", "GET", undefined, admin)).json()
+  ).events;
+  assert.ok(
+    audit.some(
+      (e: { actor: string; role: string; event: string }) =>
+        e.actor === account.username &&
+        e.role === "Consulta" &&
+        e.event === "sesion.iniciada",
+    ),
+  );
+  assert.ok(
+    audit.some(
+      (e: { actor: string; role: string; event: string }) =>
+        e.actor === account.username &&
+        e.role === "Consulta" &&
+        e.event === "contraseña.actualizada",
+    ),
+  );
+  assert.equal(
+    (await request("/api/jornadas", "GET", undefined, newLogin)).status,
+    200,
+  );
+  for (const asset of assets)
+    assert.equal(
+      (await request("/api/media", "DELETE", { id: asset.id }, admin)).status,
+      200,
+    );
+  assert.equal(
+    (await request("/api/jornadas", "DELETE", { id }, admin)).status,
+    200,
+  );
+});

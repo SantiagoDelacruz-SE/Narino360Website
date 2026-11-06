@@ -871,3 +871,143 @@ test("54 diapositivas se ordenan, se preparan y se reanudan tras perder una conf
     Array.from({ length: 54 }, (_, i) => "Serie de 54 de prueba · " + (i + 1)),
   );
 });
+
+test("El administrador crea una cuenta Consulta y el funcionario navega sin controles de edición", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await page
+    .getByRole("button", { name: "Mi cuenta y acceso", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByText("Gestionar cuentas institucionales", { exact: true })
+    .click();
+  await expect(dialog.locator(".user-list strong").first()).toBeVisible();
+  await dialog
+    .getByLabel("Nombre completo", { exact: true })
+    .fill("Secretaria de prueba");
+  await dialog
+    .getByLabel("Usuario", { exact: true })
+    .fill("secretaria-consulta");
+  await dialog.getByLabel("Rol", { exact: true }).selectOption("Consulta");
+  await dialog
+    .getByLabel("Contraseña inicial", { exact: true })
+    .fill("Clave-Consulta-Prueba-2026");
+  await dialog
+    .getByRole("button", { name: "Crear cuenta", exact: true })
+    .click();
+  await expect(
+    dialog.getByText("Cuenta creada.", { exact: true }),
+  ).toBeVisible();
+  await expect(dialog.locator(".user-list")).toContainText(
+    "secretaria-consulta · Consulta",
+  );
+  const slide = await sharp({
+    create: { width: 640, height: 360, channels: 3, background: "#10A13B" },
+  })
+    .png()
+    .toBuffer();
+  const saved = await page.request.post("/api/media", {
+    headers: { origin: new URL(page.url()).origin },
+    multipart: {
+      kind: "diapositiva",
+      title: "Presentación para la cuenta Consulta",
+      file: { name: "consulta.png", mimeType: "image/png", buffer: slide },
+    },
+  });
+  expect(saved.status()).toBe(201);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Cerrar sesión", exact: true })
+    .click();
+  await page.getByLabel("Usuario", { exact: true }).fill("secretaria-consulta");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Consulta-Prueba-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Auditoría de accesos", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Nueva jornada", exact: true }),
+  ).toHaveCount(0);
+  for (const tab of [
+    "Mapa territorial",
+    "Jornadas y actividades",
+    "Mural de evidencias",
+    "Presentación estratégica",
+    "Observatorio",
+  ]) {
+    await page.getByRole("button", { name: tab, exact: true }).click();
+    await expect(
+      page.getByRole("button", {
+        name: /^(Cargar|Editar|Eliminar|Mover antes|Mover después|Nueva jornada)/,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Importar jornadas", { exact: true }),
+    ).toHaveCount(0);
+  }
+  await page
+    .getByRole("button", { name: "Presentación estratégica", exact: true })
+    .click();
+  await expect(page.locator(".slide-thumbnails")).toBeVisible();
+  await page.locator(".slide-thumbnails button").last().click();
+  await expect(page.locator(".slide-thumbnails button").last()).toHaveClass(
+    /active/,
+  );
+  await page
+    .getByRole("button", { name: "Mi cuenta y acceso", exact: true })
+    .click();
+  await expect(
+    dialog.getByText("Tu cuenta es de solo lectura.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText("Gestionar cuentas institucionales", { exact: true }),
+  ).toHaveCount(0);
+  await dialog
+    .getByLabel("Contraseña actual", { exact: true })
+    .fill("Clave-Consulta-Prueba-2026");
+  await dialog
+    .getByLabel("Nueva contraseña", { exact: true })
+    .fill("Clave-Consulta-Nueva-2026");
+  await dialog
+    .getByLabel("Confirmar nueva contraseña", { exact: true })
+    .fill("Clave-Consulta-Nueva-2026");
+  await dialog
+    .getByRole("button", { name: "Actualizar contraseña", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText(
+    "Contraseña actualizada",
+  );
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Cerrar sesión", exact: true })
+    .click();
+  await page.getByLabel("Usuario", { exact: true }).fill("secretaria-consulta");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Consulta-Nueva-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});

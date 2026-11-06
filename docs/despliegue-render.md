@@ -52,14 +52,19 @@ Introduce y confirma una contraseña de al menos 12 caracteres. No se muestra
 en pantalla y no debe compartirse por el chat. El comando usa el mismo
 `DATA_DIR` del servicio. No vuelvas a crear la misma cuenta en cada despliegue.
 
-Ingresa en la web como **Funcionario**. Desde **Mi cuenta y acceso** podrás crear
-cuentas de editores o administradores. Después, carga jornadas, fotografías,
+Ingresa en la web como **Funcionario**. Desde **Mi cuenta y acceso → Gestionar
+cuentas institucionales** podrás crear cuentas de Consulta (solo lectura),
+editores o administradores. Para el gobernador y los secretarios, selecciona
+**Consulta (solo lectura)**. Ingresan como Funcionario con usuario y contraseña,
+pueden consultar y descargar contenidos y cambiar su contraseña. Después, carga jornadas, fotografías,
 PDF y diapositivas desde los módulos correspondientes.
 
 ## Verificación
 
 - La URL HTTPS abre la pantalla de acceso.
 - Un invitado puede consultar y no ve controles de escritura.
+- Una cuenta Consulta inicia sesión con credenciales, navega por los módulos y
+  cambia su contraseña, sin controles para editar, cargar o eliminar información.
 - El administrador puede iniciar sesión y registrar una jornada.
 - Una fotografía cargada aparece en el mural y una diapositiva en el carrusel.
 - Después de reiniciar el servicio, la cuenta, la jornada y el archivo siguen
@@ -77,6 +82,11 @@ activar despliegues automáticos desde su configuración si lo prefieres.
 Mantén una única instancia mientras se utilicen SQLite y el catálogo JSON.
 Configura respaldos del disco completo y copias consistentes de SQLite. No
 restablezcas ni borres `/var/data` al actualizar el código.
+
+La actualización que añade el rol Consulta adapta automáticamente la tabla de
+usuarios al abrir la base de datos. Conserva las cuentas, hashes de contraseña,
+sesiones y referencias existentes. No necesitas recrear usuarios ni volver
+a cargar imágenes, documentos o jornadas.
 
 ## Diagnosticar una carga que falla
 

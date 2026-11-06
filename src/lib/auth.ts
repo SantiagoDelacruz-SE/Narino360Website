@@ -5,7 +5,13 @@ import {
   createHash,
 } from "node:crypto";
 import { db, audit } from "./db";
-import { AppError, textField, type Identity, type Role } from "./domain";
+import {
+  AppError,
+  textField,
+  isAccountRole,
+  type Identity,
+  type Role,
+} from "./domain";
 export const COOKIE = "narino360_session";
 const digest = (s: string) => createHash("sha256").update(s).digest("hex");
 export function hashPassword(password: string) {
@@ -31,10 +37,7 @@ export function createUser(
   role: Exclude<Role, "Invitado">,
 ) {
   username = textField(username, "Usuario", 60).toLowerCase();
-  if (
-    !/^[a-z0-9._-]{3,60}$/.test(username) ||
-    !["Administrador", "Editor"].includes(role)
-  )
+  if (!/^[a-z0-9._-]{3,60}$/.test(username) || !isAccountRole(role))
     throw new AppError("Usuario o rol no válido.");
   const result = db()
     .prepare(
@@ -65,8 +68,7 @@ export function sessionIdentity(token?: string): Identity | null {
       `SELECT s.user_id,s.guest_id,u.name,u.username,u.role,u.active,g.nombre,g.apellido FROM sesiones s LEFT JOIN usuarios u ON s.user_id=u.id LEFT JOIN registro_invitados g ON s.guest_id=g.id WHERE s.token_hash=? AND s.expires_at>?`,
     )
     .get(digest(token), Date.now()) as
-    | Record<string, string | number>
-    | undefined;
+    Record<string, string | number> | undefined;
   if (!row) return null;
   if (row.user_id && row.active)
     return {
@@ -98,8 +100,7 @@ export function signIn(username: string, password: string) {
   const u = d
     .prepare("SELECT * FROM usuarios WHERE username=? AND active=1")
     .get(username) as
-    | { id: number; password_hash: string; role: Role }
-    | undefined;
+    { id: number; password_hash: string; role: Role } | undefined;
   const valid = verifyPassword(
     password,
     u?.password_hash ?? "00000000000000000000000000000000:" + "00".repeat(64),
