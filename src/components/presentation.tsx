@@ -112,7 +112,11 @@ export default function Presentation({
       >
         <div className="slide-canvas">
           {slide ? (
-            <img src={"/api/media/" + slide.id} alt={slide.title} />
+            <img
+              src={"/api/media/" + slide.id}
+              alt={slide.title}
+              decoding="async"
+            />
           ) : (
             <div className="template-slide">
               <div className="overline light">
@@ -186,7 +190,12 @@ export default function Presentation({
               onClick={() => setIndex(i)}
               aria-label={"Ir a diapositiva " + (i + 1)}
             >
-              <img src={"/api/media/" + s.id} alt="" />
+              <img
+                src={"/api/media/" + s.id + "?size=thumbnail"}
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
               <span>
                 {i + 1}. {s.title}
               </span>

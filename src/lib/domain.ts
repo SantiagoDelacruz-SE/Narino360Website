@@ -120,6 +120,7 @@ export type Asset = {
   activityId: number | null;
   filename: string;
   createdAt: string;
+  uploadId?: string;
   publicationType?: PublicationType;
   publicationDate?: string;
 };

@@ -651,13 +651,11 @@ test("Las diapositivas grandes se rechazan antes de subir y un JPEG válido se g
     if (request.url().endsWith("/api/media") && request.method() === "POST")
       uploads++;
   });
-  await dialog
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: "portada-muy-grande.jpg",
-      mimeType: "image/jpeg",
-      buffer: Buffer.alloc(15 * 1024 * 1024 + 1),
-    });
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "portada-muy-grande.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.alloc(15 * 1024 * 1024 + 1),
+  });
   await dialog
     .getByRole("button", { name: "Cargar archivos", exact: true })
     .click();
@@ -671,13 +669,11 @@ test("Las diapositivas grandes se rechazan antes de subir y un JPEG válido se g
   })
     .jpeg()
     .toBuffer();
-  await dialog
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: "01_portada.jpg",
-      mimeType: "image/jpeg",
-      buffer: jpeg,
-    });
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "01_portada.jpg",
+    mimeType: "image/jpeg",
+    buffer: jpeg,
+  });
   await dialog
     .getByRole("button", { name: "Cargar archivos", exact: true })
     .click();
@@ -686,4 +682,86 @@ test("Las diapositivas grandes se rechazan antes de subir y un JPEG válido se g
   await expect(page.locator(".slide-thumbnails")).toContainText(
     "Portada JPEG de prueba",
   );
+});
+
+test("Una respuesta perdida se confirma sin repetir la subida; un corte previo conserva el formulario", async ({
+  page,
+}) => {
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await page
+    .getByRole("button", { name: "Presentación estratégica", exact: true })
+    .click();
+  let mode: "lost-response" | "not-sent" = "lost-response",
+    posts = 0;
+  await page.route("**/api/media", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    posts++;
+    if (mode === "lost-response") {
+      const saved = await route.fetch();
+      expect(saved.status()).toBe(201);
+    }
+    await route.abort("connectionreset");
+  });
+  const png = await sharp({
+    create: { width: 1280, height: 720, channels: 3, background: "#10A13B" },
+  })
+    .png()
+    .toBuffer();
+  async function upload(title: string) {
+    await page
+      .getByRole("button", { name: "Cargar diapositivas", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Título", { exact: true }).fill(title);
+    await dialog
+      .locator('input[type="file"]')
+      .setInputFiles({
+        name: "conexion.png",
+        mimeType: "image/png",
+        buffer: png,
+      });
+    await dialog
+      .getByRole("button", { name: "Cargar archivos", exact: true })
+      .click();
+    return dialog;
+  }
+  let dialog = await upload("Respuesta perdida de prueba");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator(".slide-thumbnails")).toContainText(
+    "Respuesta perdida de prueba",
+  );
+  expect(posts).toBe(1);
+  const confirmed = await page.evaluate(async () => {
+    const response = await fetch("/api/media");
+    return (await response.json()).assets.filter(
+      (a: { title: string }) => a.title === "Respuesta perdida de prueba",
+    );
+  });
+  expect(confirmed).toHaveLength(1);
+  expect(confirmed[0].uploadId).toMatch(/^[a-f0-9-]{36}$/);
+  const previews = page.locator(".slide-thumbnails img");
+  await expect(previews.first()).toHaveAttribute("src", /\?size=thumbnail$/);
+  await expect(previews.first()).toHaveAttribute("loading", "lazy");
+  mode = "not-sent";
+  dialog = await upload("Solicitud no recibida de prueba");
+  await expect(dialog.getByRole("alert")).toContainText("No se pudo confirmar");
+  await expect(
+    dialog.getByRole("button", { name: "Cargar archivos", exact: true }),
+  ).toBeEnabled();
+  expect(posts).toBe(2);
+  const missing = await page.evaluate(async () => {
+    const response = await fetch("/api/media");
+    return (await response.json()).assets.filter(
+      (a: { title: string }) => a.title === "Solicitud no recibida de prueba",
+    ).length;
+  });
+  expect(missing).toBe(0);
 });

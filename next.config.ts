@@ -18,6 +18,12 @@ const config: NextConfig = {
         source: "/api/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
       },
+      {
+        // File handlers authenticate every request, including ETag validation.
+        // Keep JSON APIs uncached while allowing private file revalidation.
+        source: "/api/media/:id",
+        headers: [{ key: "Cache-Control", value: "private, no-cache" }],
+      },
     ];
   },
 };

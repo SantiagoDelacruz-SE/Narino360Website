@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
+import { imageTask, previewBuffer, thumbnailPath } from "@/lib/images";
 import { readAssets, writeAssets, mediaDir, assetPath } from "@/lib/media";
 import { audit, db } from "@/lib/db";
 import {
@@ -31,6 +32,7 @@ export async function GET() {
 }
 export async function POST(request: Request) {
   let createdPath: string | undefined;
+  let createdPreview: string | undefined;
   const requestId = randomUUID(),
     started = Date.now();
   let phase = "authorization";
@@ -86,6 +88,16 @@ export async function POST(request: Request) {
       !["evidencia", "diapositiva", "documento", "publicacion"].includes(kind)
     )
       throw new AppError("Tipo de archivo no válido.");
+    const uploadId = data.get("uploadId")
+      ? textField(data.get("uploadId"), "Identificador de carga", 36)
+      : undefined;
+    if (
+      uploadId &&
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+        uploadId,
+      )
+    )
+      throw new AppError("Identificador de carga no válido.");
     const title = textField(data.get("title"), "Título", 200),
       caption = textField(data.get("caption") || "", "Descripción", 2000, 0);
     const municipality = textField(
@@ -119,6 +131,7 @@ export async function POST(request: Request) {
     const id = randomUUID(),
       buffer = Buffer.from(await file.arrayBuffer());
     let encoded: Buffer, ext: string;
+    let preview: Buffer | undefined;
     if (kind === "documento" || kind === "publicacion") {
       if (!buffer.subarray(0, 5).equals(Buffer.from("%PDF-")))
         throw new AppError("Los soportes documentales deben ser PDF.");
@@ -127,29 +140,34 @@ export async function POST(request: Request) {
     } else {
       phase = "processing";
       try {
-        const imageMetadata = await sharp(buffer, {
-          limitInputPixels: 40000000,
-        }).metadata();
-        const format = imageMetadata.format;
-        trace("processing", {
-          width: imageMetadata.width || 0,
-          height: imageMetadata.height || 0,
-        });
-        if (!format || !["jpeg", "png", "webp"].includes(format))
-          throw new Error("Formato no permitido");
-        encoded = await sharp(buffer, {
-          limitInputPixels: 40000000,
-          animated: false,
-        })
-          .rotate()
-          .resize({
-            width: 4096,
-            height: 4096,
-            fit: "inside",
-            withoutEnlargement: true,
+        const result = await imageTask(async () => {
+          const imageMetadata = await sharp(buffer, {
+            limitInputPixels: 40000000,
+          }).metadata();
+          const format = imageMetadata.format;
+          trace("processing", {
+            width: imageMetadata.width || 0,
+            height: imageMetadata.height || 0,
+          });
+          if (!format || !["jpeg", "png", "webp"].includes(format))
+            throw new Error("Formato no permitido");
+          const full = await sharp(buffer, {
+            limitInputPixels: 40000000,
+            animated: false,
           })
-          .webp({ quality: 90 })
-          .toBuffer();
+            .rotate()
+            .resize({
+              width: 4096,
+              height: 4096,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 90 })
+            .toBuffer();
+          return { encoded: full, preview: await previewBuffer(full) };
+        });
+        encoded = result.encoded;
+        preview = result.preview;
       } catch {
         throw new AppError(
           "No se pudo leer la imagen. Usa JPG, PNG o WebP de hasta 40 megapíxeles.",
@@ -163,6 +181,10 @@ export async function POST(request: Request) {
     const filename = id + "." + ext;
     createdPath = assetPath(filename);
     writeFileSync(createdPath, encoded, { mode: 0o600 });
+    if (preview) {
+      createdPreview = thumbnailPath(filename);
+      writeFileSync(createdPreview, preview, { mode: 0o600 });
+    }
     const asset: Asset = {
       id,
       kind: kind as Asset["kind"],
@@ -174,9 +196,11 @@ export async function POST(request: Request) {
       filename,
       createdAt: new Date().toISOString(),
       ...metadata,
+      ...(uploadId ? { uploadId } : {}),
     };
     writeAssets([...readAssets(), asset]);
     createdPath = undefined;
+    createdPreview = undefined;
     audit(actor(user), user.role, "archivo.cargado", id);
     trace("completed");
     return NextResponse.json(
@@ -196,6 +220,8 @@ export async function POST(request: Request) {
             ? e.code
             : "none",
       });
+    if (createdPreview && existsSync(/*turbopackIgnore: true*/ createdPreview))
+      unlinkSync(/*turbopackIgnore: true*/ createdPreview);
     if (createdPath && existsSync(/*turbopackIgnore: true*/ createdPath))
       unlinkSync(/*turbopackIgnore: true*/ createdPath);
     const response = errorResponse(e);
@@ -238,8 +264,12 @@ export async function DELETE(request: Request) {
       asset = items.find((a) => a.id === value.id);
     if (!asset) throw new AppError("Archivo no encontrado.", 404);
     writeAssets(items.filter((a) => a.id !== asset.id));
-    if (existsSync(assetPath(asset.filename)))
-      unlinkSync(assetPath(asset.filename));
+    await imageTask(async () => {
+      if (existsSync(assetPath(asset.filename)))
+        unlinkSync(assetPath(asset.filename));
+      const preview = thumbnailPath(asset.filename);
+      if (existsSync(preview)) unlinkSync(preview);
+    });
     audit(actor(user), user.role, "archivo.eliminado", asset.id);
     return NextResponse.json({ ok: true });
   } catch (e) {

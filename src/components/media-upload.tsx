@@ -8,7 +8,7 @@ import {
   type Activity,
   type Asset,
 } from "@/lib/domain";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 export default function MediaUpload({
   kind,
   activities,
@@ -47,11 +47,33 @@ export default function MediaUpload({
         const data = new FormData();
         for (const [key, value] of form)
           if (key !== "files") data.set(key, value);
+        const uploadId = crypto.randomUUID();
+        data.set("uploadId", uploadId);
         data.set("file", file);
         data.set("kind", kind);
         if (files.length > 1)
           data.set("title", String(form.get("title")) + " · " + (count + 1));
-        await api("/api/media", { method: "POST", body: data });
+        try {
+          await api("/api/media", { method: "POST", body: data });
+        } catch (error) {
+          if (
+            error instanceof ApiError &&
+            error.status &&
+            error.status >= 400 &&
+            error.status < 500
+          )
+            throw error;
+          const confirmation = await api<{ assets: Asset[] }>("/api/media", {
+            timeoutMs: 5000,
+          }).catch(() => null);
+          if (
+            !confirmation?.assets.some((asset) => asset.uploadId === uploadId)
+          )
+            throw new Error(
+              (error as Error).message +
+                " No se pudo confirmar que este archivo quedara guardado; revisa el listado antes de volver a cargarlo.",
+            );
+        }
         count++;
       }
       await onSaved();

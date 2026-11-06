@@ -791,9 +791,10 @@ export default function Observatory({
                           onClick={() => setModal({ type: "image", asset: a })}
                         >
                           <img
-                            src={"/api/media/" + a.id}
+                            src={"/api/media/" + a.id + "?size=thumbnail"}
                             alt={a.title}
                             loading="lazy"
+                            decoding="async"
                           />
                           <span>
                             Ver en alta definición

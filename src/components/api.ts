@@ -1,4 +1,12 @@
 type ApiOptions = RequestInit & { timeoutMs?: number };
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status?: number,
+  ) {
+    super(message);
+  }
+}
 export const SESSION_EXPIRED_EVENT = "narino360:session-expired";
 export async function api<T = Record<string, unknown>>(
   url: string,
@@ -50,13 +58,14 @@ export async function api<T = Record<string, unknown>>(
         typeof result.error === "string"
           ? result.error
           : undefined;
-      throw new Error(
+      throw new ApiError(
         detail ||
           (response.status >= 500
             ? "El servidor no está disponible en este momento. Intenta de nuevo más tarde."
             : "No se pudo completar la operación (HTTP " +
               response.status +
               ")."),
+        response.status,
       );
     }
     if (!result || typeof result !== "object")

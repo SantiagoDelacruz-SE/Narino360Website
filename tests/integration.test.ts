@@ -595,14 +595,60 @@ test("Una diapositiva JPEG se convierte, persiste y devuelve identificador de di
     admin,
   );
   assert.equal(image.status, 200);
-  const metadata = await sharp(
-    Buffer.from(await image.arrayBuffer()),
-  ).metadata();
+  const originalBytes = Buffer.from(await image.arrayBuffer());
+  const metadata = await sharp(originalBytes).metadata();
   assert.equal(metadata.format, "webp");
   assert.equal(metadata.width, 4096);
   assert.equal(metadata.height, 2304);
+  const thumbnail = await request(
+    "/api/media/" + asset.id + "?size=thumbnail",
+    "GET",
+    undefined,
+    admin,
+  );
+  assert.equal(thumbnail.status, 200);
+  const previewBytes = Buffer.from(await thumbnail.arrayBuffer());
+  const previewMetadata = await sharp(previewBytes).metadata();
+  assert.equal(previewMetadata.width, 640);
+  assert.equal(previewMetadata.height, 360);
+  assert.equal(thumbnail.headers.get("cache-control"), "private, no-cache");
+  assert.match(thumbnail.headers.get("vary")!, /cookie/i);
+  assert.ok(
+    previewBytes.length < originalBytes.length,
+    "La miniatura debe transferir menos bytes que la imagen HD.",
+  );
+  const etag = thumbnail.headers.get("etag")!;
+  const cached = await fetch(
+    origin + "/api/media/" + asset.id + "?size=thumbnail",
+    { headers: { cookie: admin, "if-none-match": etag } },
+  );
+  assert.equal(cached.status, 304);
+  assert.equal(await cached.text(), "");
+  const denied = await fetch(
+    origin + "/api/media/" + asset.id + "?size=thumbnail",
+    { headers: { "if-none-match": etag } },
+  );
+  assert.equal(denied.status, 401);
+  const { thumbnailPath } = await import("../src/lib/images");
+  const { existsSync } = await import("node:fs");
+  const previewPath = thumbnailPath(asset.filename);
+  assert.ok(existsSync(previewPath));
+  rmSync(previewPath);
+  const legacy = await Promise.all(
+    [1, 2, 3].map(() =>
+      request(
+        "/api/media/" + asset.id + "?size=thumbnail",
+        "GET",
+        undefined,
+        admin,
+      ),
+    ),
+  );
+  for (const response of legacy) assert.equal(response.status, 200);
+  assert.ok(existsSync(previewPath));
   assert.equal(
     (await request("/api/media", "DELETE", { id: asset.id }, admin)).status,
     200,
   );
+  assert.equal(existsSync(previewPath), false);
 });

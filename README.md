@@ -52,7 +52,12 @@ Los cambios de contraseña revocan las demás sesiones del funcionario.
 - Mural HD con selector de 2 a 4 columnas en escritorio, vista ampliada y descarga.
   En pantallas pequeñas se adapta a dos columnas. Carga de JPG, PNG o WebP: hasta
   20 imágenes por operación, 15 MB y 40 megapíxeles por archivo. Conversión WebP de
-  hasta 4096 px con eliminación de metadatos. Los PDF se sirven como descarga.
+  hasta 4096 px con eliminación de metadatos. El mural y el carrusel utilizan
+  miniaturas de hasta 640 px y carga diferida; el visor y la descarga conservan
+  la imagen HD. Las miniaturas antiguas se generan al consultarlas sin cambiar
+  los originales. Los PDF y las imágenes se sirven por streaming, con caché
+  privada que revalida la sesión antes de reutilizar los archivos.
+  Las transformaciones de imágenes se procesan de una en una para limitar memoria.
 - Carrusel panorámico 16:9: imágenes oficiales cargadas por funcionarios, títulos,
   descripciones, miniaturas, orden editable, eliminación, teclado y pantalla
   completa cuando el navegador la permite. Avance manual. Sin archivos muestra
@@ -88,6 +93,11 @@ En **Presentación estratégica → Cargar diapositivas** sube imágenes, prefer
 16:9. Si tu presentación está en PowerPoint o PDF, exporta primero sus páginas a
 imágenes. Las cargas se realizan archivo por archivo; ante un error se informa
 cuántos archivos quedaron guardados y se pueden conservar o eliminar.
+
+Si se pierde la respuesta de una subida, el navegador comprueba una vez si esa
+carga quedó registrada mediante su identificador único. Solo continúa si el
+servidor confirma su existencia. No reenvía automáticamente el archivo; si no
+puede confirmar el resultado, pide revisar el listado antes de volver a cargarlo.
 
 Las referencias aportadas de 39 municipios, 31.325 personas, 5.755 familias y 194
 armas se muestran separadas de los resultados calculados. No se usan como datos
