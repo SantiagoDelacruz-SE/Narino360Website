@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import sharp from "sharp";
 import {
@@ -651,4 +651,66 @@ test("Una diapositiva JPEG se convierte, persiste y devuelve identificador de di
     200,
   );
   assert.equal(existsSync(previewPath), false);
+});
+
+test("Reintentos simultáneos con el mismo identificador guardan una sola diapositiva", async () => {
+  const png = await sharp({
+    create: { width: 640, height: 360, channels: 3, background: "#10A13B" },
+  })
+    .png()
+    .toBuffer();
+  const uploadId = randomUUID();
+  const upload = (
+    kind = "diapositiva",
+    id: string = uploadId,
+    cookie = admin,
+  ) => {
+    const form = new FormData();
+    form.set("kind", kind);
+    form.set("title", "Diapositiva con carga recuperable");
+    form.set("uploadId", id);
+    form.set(
+      "file",
+      new Blob([new Uint8Array(png)], { type: "image/png" }),
+      "reintento.png",
+    );
+    return request("/api/media", "POST", form, cookie);
+  };
+  const responses = await Promise.all([upload(), upload(), upload()]);
+  const ids = [];
+  for (const response of responses) {
+    assert.ok(
+      response.status === 200 || response.status === 201,
+      await response.clone().text(),
+    );
+    ids.push((await response.json()).asset.id);
+  }
+  assert.equal(new Set(ids).size, 1);
+  const saved = (
+    await (await request("/api/media", "GET", undefined, admin)).json()
+  ).assets;
+  assert.equal(
+    saved.filter((a: { uploadId: string }) => a.uploadId === uploadId).length,
+    1,
+  );
+  assert.equal((await upload()).status, 200);
+  assert.equal((await upload("evidencia")).status, 409);
+  assert.equal((await upload("diapositiva", "no-valido")).status, 400);
+  const visitor = await request("/api/auth", "POST", {
+    action: "guest",
+    firstName: "Ana",
+    lastName: "Prueba",
+    entity: "Entidad",
+    position: "Analista",
+  });
+  assert.equal(visitor.status, 200);
+  const visitorCookie = visitor.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(
+    (await upload("diapositiva", uploadId, visitorCookie)).status,
+    403,
+  );
+  assert.equal(
+    (await request("/api/media", "DELETE", { id: ids[0] }, admin)).status,
+    200,
+  );
 });

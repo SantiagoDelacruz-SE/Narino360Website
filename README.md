@@ -51,7 +51,7 @@ Los cambios de contraseña revocan las demás sesiones del funcionario.
   personas, familias, armas y coordenadas explícitas. Requiere revisión humana.
 - Mural HD con selector de 2 a 4 columnas en escritorio, vista ampliada y descarga.
   En pantallas pequeñas se adapta a dos columnas. Carga de JPG, PNG o WebP: hasta
-  20 imágenes por operación, 15 MB y 40 megapíxeles por archivo. Conversión WebP de
+  20 imágenes por operación (100 en el carrusel), 15 MB y 40 megapíxeles por archivo. Conversión WebP de
   hasta 4096 px con eliminación de metadatos. El mural y el carrusel utilizan
   miniaturas de hasta 640 px y carga diferida; el visor y la descarga conservan
   la imagen HD. Las miniaturas antiguas se generan al consultarlas sin cambiar
@@ -91,13 +91,21 @@ conservan sus módulos y no se mezclan con el catálogo de publicaciones.
 
 En **Presentación estratégica → Cargar diapositivas** sube imágenes, preferiblemente
 16:9. Si tu presentación está en PowerPoint o PDF, exporta primero sus páginas a
-imágenes. Las cargas se realizan archivo por archivo; ante un error se informa
-cuántos archivos quedaron guardados y se pueden conservar o eliminar.
+imágenes. Puedes seleccionar las 54 diapositivas de una presentación en una sola
+operación (máximo 100). Nómbralas `01_portada.jpg`, `02_contexto.jpg`, etc.; el
+carrusel las carga en orden numérico de nombre, de una en una. Antes del envío,
+el navegador reduce las dimensiones hasta 4096 px y prepara la imagen en WebP;
+los archivos originales del computador no se modifican.
 
 Si se pierde la respuesta de una subida, el navegador comprueba una vez si esa
 carga quedó registrada mediante su identificador único. Solo continúa si el
 servidor confirma su existencia. No reenvía automáticamente el archivo; si no
-puede confirmar el resultado, pide revisar el listado antes de volver a cargarlo.
+puede confirmar el resultado, mantiene los archivos y el progreso en el formulario.
+Pulsa **Reanudar pendientes** cuando vuelva la conexión: comprueba el archivo
+pendiente antes de reenviarlo y conserva su identificador para evitar duplicados,
+incluso si el intento anterior termina tarde. No cierres el formulario ni recargues
+la página: la cola se conserva solo mientras esa ventana está abierta. **Elegir
+otros archivos** descarta la cola pendiente; no elimina los archivos ya guardados.
 
 Las referencias aportadas de 39 municipios, 31.325 personas, 5.755 familias y 194
 armas se muestran separadas de los resultados calculados. No se usan como datos

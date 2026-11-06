@@ -721,13 +721,11 @@ test("Una respuesta perdida se confirma sin repetir la subida; un corte previo c
       .click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Título", { exact: true }).fill(title);
-    await dialog
-      .locator('input[type="file"]')
-      .setInputFiles({
-        name: "conexion.png",
-        mimeType: "image/png",
-        buffer: png,
-      });
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: "conexion.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
     await dialog
       .getByRole("button", { name: "Cargar archivos", exact: true })
       .click();
@@ -754,7 +752,7 @@ test("Una respuesta perdida se confirma sin repetir la subida; un corte previo c
   dialog = await upload("Solicitud no recibida de prueba");
   await expect(dialog.getByRole("alert")).toContainText("No se pudo confirmar");
   await expect(
-    dialog.getByRole("button", { name: "Cargar archivos", exact: true }),
+    dialog.getByRole("button", { name: "Reanudar pendientes", exact: true }),
   ).toBeEnabled();
   expect(posts).toBe(2);
   const missing = await page.evaluate(async () => {
@@ -764,4 +762,112 @@ test("Una respuesta perdida se confirma sin repetir la subida; un corte previo c
     ).length;
   });
   expect(missing).toBe(0);
+});
+
+test("54 diapositivas se ordenan, se preparan y se reanudan tras perder una confirmación sin duplicados", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await page
+    .getByRole("button", { name: "Presentación estratégica", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Cargar diapositivas", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Título", { exact: true })
+    .fill("Serie de 54 de prueba");
+  const jpeg = await sharp({
+    create: { width: 6000, height: 3375, channels: 3, background: "#FFD500" },
+  })
+    .jpeg()
+    .toBuffer();
+  const png = await sharp({
+    create: { width: 640, height: 360, channels: 3, background: "#10A13B" },
+  })
+    .png()
+    .toBuffer();
+  await dialog.locator('input[type="file"]').setInputFiles(
+    Array.from({ length: 54 }, (_, i) => {
+      const number = 54 - i;
+      return {
+        name: number + (number === 1 ? ".jpg" : ".png"),
+        mimeType: number === 1 ? "image/jpeg" : "image/png",
+        buffer: number === 1 ? jpeg : png,
+      };
+    }),
+  );
+  let posts = 0,
+    loseConfirmation = false;
+  const names: string[] = [];
+  await page.route("**/api/media", async (route) => {
+    if (route.request().method() !== "POST") {
+      if (loseConfirmation) {
+        loseConfirmation = false;
+        await route.abort("connectionreset");
+      } else await route.continue();
+      return;
+    }
+    posts++;
+    const form = await new Response(
+      new Uint8Array(route.request().postDataBuffer()!),
+      {
+        headers: { "content-type": route.request().headers()["content-type"] },
+      },
+    ).formData();
+    const file = form.get("file") as File;
+    names.push(file.name);
+    if (posts === 1) {
+      const metadata = await sharp(
+        Buffer.from(await file.arrayBuffer()),
+      ).metadata();
+      expect(metadata.format).toBe("webp");
+      expect(metadata.width).toBe(4096);
+      expect(metadata.height).toBe(2304);
+      expect(file.size).toBeLessThan(jpeg.length);
+    }
+    if (posts === 6) {
+      const saved = await route.fetch();
+      expect(saved.status()).toBe(201);
+      loseConfirmation = true;
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await dialog
+    .getByRole("button", { name: "Cargar archivos", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "5 de 54 archivos confirmados",
+    { timeout: 30000 },
+  );
+  expect(posts).toBe(6);
+  await expect(dialog.getByLabel("Título", { exact: true })).toBeDisabled();
+  await dialog
+    .getByRole("button", { name: "Reanudar pendientes", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible({ timeout: 60000 });
+  expect(posts).toBe(54);
+  expect(names).toEqual(
+    Array.from({ length: 54 }, (_, i) => i + 1 + (i === 0 ? ".jpg" : ".png")),
+  );
+  const saved = await page.evaluate(async () => {
+    const { assets } = await (await fetch("/api/media")).json();
+    return assets.filter((a: { title: string }) =>
+      a.title.startsWith("Serie de 54 de prueba · "),
+    );
+  });
+  expect(saved).toHaveLength(54);
+  expect(new Set(saved.map((a: { uploadId: string }) => a.uploadId)).size).toBe(
+    54,
+  );
+  expect(saved.map((a: { title: string }) => a.title)).toEqual(
+    Array.from({ length: 54 }, (_, i) => "Serie de 54 de prueba · " + (i + 1)),
+  );
 });

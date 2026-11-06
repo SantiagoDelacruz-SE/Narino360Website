@@ -98,6 +98,23 @@ export async function POST(request: Request) {
       )
     )
       throw new AppError("Identificador de carga no válido.");
+    const previousUpload = () => {
+      const asset = uploadId
+        ? readAssets().find((item) => item.uploadId === uploadId)
+        : undefined;
+      if (asset && asset.kind !== kind)
+        throw new AppError("El identificador corresponde a otra carga.", 409);
+      return asset;
+    };
+    const reusedResponse = (asset: Asset) => {
+      trace("confirmed");
+      return NextResponse.json(
+        { asset },
+        { headers: { "X-Request-ID": requestId } },
+      );
+    };
+    const previous = previousUpload();
+    if (previous) return reusedResponse(previous);
     const title = textField(data.get("title"), "Título", 200),
       caption = textField(data.get("caption") || "", "Descripción", 2000, 0);
     const municipality = textField(
@@ -175,6 +192,11 @@ export async function POST(request: Request) {
       }
       ext = "webp";
     }
+    // Another request with this ID may have finished during image processing.
+    // The check and synchronous catalog write below cannot interleave within
+    // the single service process that owns this disk.
+    const concurrent = previousUpload();
+    if (concurrent) return reusedResponse(concurrent);
     phase = "persisting";
     trace("persisting", { bytes: encoded.length });
     mkdirSync(mediaDir, { recursive: true, mode: 0o700 });
