@@ -41,6 +41,8 @@ import {
   REFERENCES,
   normalize,
   canEditContent,
+  ACCOUNT_ROLES,
+  type AccountRole,
   type Activity,
   type Asset,
   type Identity,
@@ -1263,15 +1265,22 @@ function Account({ user }: { user: Identity }) {
     </div>
   );
 }
+type ManagedAccount = {
+  id: number;
+  username: string;
+  name: string;
+  role: AccountRole;
+  active: number;
+};
 function UserManagement() {
-  const [users, setUsers] = useState<
-      { id: number; username: string; name: string; role: string }[]
-    >([]),
+  const router = useRouter();
+  const [users, setUsers] = useState<ManagedAccount[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [success, setSuccess] = useState(""),
     [expanded, setExpanded] = useState(false),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [editing, setEditing] = useState<ManagedAccount | null>(null);
   useEffect(() => {
     if (!expanded) return;
     const controller = new AbortController();
@@ -1312,9 +1321,137 @@ function UserManagement() {
               <small>
                 {u.username} · {u.role}
               </small>
+              <span
+                className={
+                  "account-state " + (u.active ? "active" : "inactive")
+                }
+              >
+                {u.active ? "Activa" : "Inactiva"}
+              </span>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={busy || loading}
+                aria-label={"Editar acceso de " + u.username}
+                onClick={() => {
+                  setEditing(u);
+                  setError("");
+                  setSuccess("");
+                }}
+              >
+                <Pencil size={14} /> Editar acceso
+              </button>
             </div>
           ))}
         </div>
+        {editing && (
+          <form
+            className="form-stack account-edit"
+            aria-label={"Editar acceso de " + editing.username}
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              setBusy(true);
+              setError("");
+              setSuccess("");
+              try {
+                const result = await api<{
+                  accessChanged: boolean;
+                  relogin: boolean;
+                }>("/api/usuarios", {
+                  method: "PUT",
+                  body: JSON.stringify({
+                    id: editing.id,
+                    name: form.get("name"),
+                    role: form.get("role"),
+                    active: form.get("active") === "on",
+                  }),
+                });
+                if (result.relogin) {
+                  router.replace("/acceso");
+                  router.refresh();
+                  return;
+                }
+                const refreshed = await api<{ users: ManagedAccount[] }>(
+                  "/api/usuarios",
+                );
+                setUsers(refreshed.users);
+                setEditing(null);
+                setSuccess(
+                  "Cuenta actualizada." +
+                    (result.accessChanged
+                      ? " Sus sesiones se cerraron; deberá ingresar nuevamente si está activa."
+                      : ""),
+                );
+              } catch (error) {
+                setError((error as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <h3>Editar acceso</h3>
+            <p className="form-help">Usuario: {editing.username}</p>
+            <fieldset
+              className="form-stack"
+              disabled={busy || loading}
+              style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+              key={editing.id}
+            >
+              <label>
+                Nombre completo
+                <input
+                  name="name"
+                  defaultValue={editing.name}
+                  required
+                  maxLength={120}
+                />
+              </label>
+              <label>
+                Rol
+                <select
+                  name="role"
+                  aria-label="Rol de acceso"
+                  defaultValue={editing.role}
+                >
+                  {ACCOUNT_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role === "Consulta" ? "Consulta (solo lectura)" : role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="account-active">
+                <input
+                  type="checkbox"
+                  name="active"
+                  defaultChecked={Boolean(editing.active)}
+                />
+                Cuenta activa
+              </label>
+              <p className="form-help">
+                Al cambiar el rol o el estado se cerrarán todas las sesiones de
+                esta cuenta. Una cuenta inactiva no puede ingresar. Si cambias
+                tu propio acceso, tendrás que iniciar sesión nuevamente.
+              </p>
+              <div className="inline-actions">
+                <button className="button primary" disabled={busy || loading}>
+                  {busy ? "Guardando…" : "Guardar cambios"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => {
+                    setEditing(null);
+                    setError("");
+                  }}
+                >
+                  Cancelar edición
+                </button>
+              </div>
+            </fieldset>
+          </form>
+        )}
         <form
           className="form-stack"
           onSubmit={async (e) => {

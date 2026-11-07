@@ -1011,3 +1011,174 @@ test("El administrador crea una cuenta Consulta y el funcionario navega sin cont
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("El administrador edita rol y estado desde la web, revoca sesiones y conserva su propio acceso", async ({
+  page,
+  browser,
+}, testInfo) => {
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await page
+    .getByRole("button", { name: "Mi cuenta y acceso", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByText("Gestionar cuentas institucionales", { exact: true })
+    .click();
+  await expect(dialog.locator(".user-list strong").first()).toBeVisible();
+  await dialog
+    .getByLabel("Nombre completo", { exact: true })
+    .fill("Funcionaria editable");
+  await dialog.getByLabel("Usuario", { exact: true }).fill("acceso-editable");
+  await dialog.getByLabel("Rol", { exact: true }).selectOption("Editor");
+  await dialog
+    .getByLabel("Contraseña inicial", { exact: true })
+    .fill("Clave-Gestion-Prueba-2026");
+  await dialog
+    .getByRole("button", { name: "Crear cuenta", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText("Cuenta creada");
+  const origin = new URL(page.url()).origin;
+  const visitor = await browser.newPage();
+  try {
+    async function loginVisitor() {
+      await visitor.goto(origin + "/acceso");
+      await visitor
+        .getByLabel("Usuario", { exact: true })
+        .fill("acceso-editable");
+      await visitor
+        .getByLabel("Contraseña", { exact: true })
+        .fill("Clave-Gestion-Prueba-2026");
+      await visitor
+        .getByRole("button", { name: "Ingresar al observatorio" })
+        .click();
+    }
+    await loginVisitor();
+    await expect(
+      visitor.getByRole("button", { name: "Nueva jornada", exact: true }),
+    ).toBeVisible();
+    await dialog
+      .getByRole("button", {
+        name: "Editar acceso de acceso-editable",
+        exact: true,
+      })
+      .click();
+    let edit = dialog.getByRole("form", {
+      name: "Editar acceso de acceso-editable",
+      exact: true,
+    });
+    await edit
+      .getByLabel("Nombre completo", { exact: true })
+      .fill("Secretaria de consulta");
+    await edit
+      .getByLabel("Rol de acceso", { exact: true })
+      .selectOption("Consulta");
+    await edit
+      .getByRole("button", { name: "Guardar cambios", exact: true })
+      .click();
+    await expect(dialog.getByRole("status")).toContainText(
+      "Sus sesiones se cerraron",
+    );
+    expect((await visitor.request.get(origin + "/api/auth")).status()).toBe(
+      401,
+    );
+    await loginVisitor();
+    await expect(
+      visitor.getByRole("heading", {
+        name: "Observatorio de Paz, Seguridad y Convivencia",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      visitor.getByRole("button", { name: "Nueva jornada", exact: true }),
+    ).toHaveCount(0);
+    await dialog
+      .getByRole("button", {
+        name: "Editar acceso de acceso-editable",
+        exact: true,
+      })
+      .click();
+    edit = dialog.getByRole("form", {
+      name: "Editar acceso de acceso-editable",
+      exact: true,
+    });
+    await edit.getByLabel("Cuenta activa", { exact: true }).uncheck();
+    await page.screenshot({
+      path: testInfo.outputPath("edicion-accesos.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+    await edit
+      .getByRole("button", { name: "Guardar cambios", exact: true })
+      .click();
+    await expect(dialog.getByRole("status")).toContainText(
+      "Cuenta actualizada",
+    );
+    await expect(
+      dialog.locator(".user-list > div").filter({ hasText: "acceso-editable" }),
+    ).toContainText("Inactiva");
+    expect((await visitor.request.get(origin + "/api/auth")).status()).toBe(
+      401,
+    );
+    await loginVisitor();
+    await expect(visitor.getByRole("alert")).toBeVisible();
+    await dialog
+      .getByRole("button", {
+        name: "Editar acceso de acceso-editable",
+        exact: true,
+      })
+      .click();
+    edit = dialog.getByRole("form", {
+      name: "Editar acceso de acceso-editable",
+      exact: true,
+    });
+    await edit.getByLabel("Cuenta activa", { exact: true }).check();
+    await edit
+      .getByRole("button", { name: "Guardar cambios", exact: true })
+      .click();
+    await expect(dialog.getByRole("status")).toContainText(
+      "Cuenta actualizada",
+    );
+    await loginVisitor();
+    await expect(
+      visitor.getByRole("heading", {
+        name: "Observatorio de Paz, Seguridad y Convivencia",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await dialog
+      .getByRole("button", {
+        name: "Editar acceso de admin-prueba",
+        exact: true,
+      })
+      .click();
+    const own = dialog.getByRole("form", {
+      name: "Editar acceso de admin-prueba",
+      exact: true,
+    });
+    await own
+      .getByLabel("Rol de acceso", { exact: true })
+      .selectOption("Consulta");
+    await own
+      .getByRole("button", { name: "Guardar cambios", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText(
+      "administrador activo",
+    );
+    await own
+      .getByRole("button", { name: "Cancelar edición", exact: true })
+      .click();
+    await expect(
+      dialog.getByRole("button", {
+        name: "Editar acceso de admin-prueba",
+        exact: true,
+      }),
+    ).toBeEnabled();
+  } finally {
+    await visitor.close();
+  }
+});

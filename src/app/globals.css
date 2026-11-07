@@ -1764,6 +1764,38 @@ td small {
   color: var(--muted);
   margin-top: 5px;
 }
+.user-list > div {
+  display: grid;
+  gap: 6px;
+}
+.user-list .button {
+  justify-self: start;
+}
+.account-state {
+  font-size: 11px;
+  font-weight: 600;
+}
+.account-state.active {
+  color: var(--green);
+}
+.account-state.inactive {
+  color: var(--red);
+}
+.account-edit {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.account-active {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.account-active input {
+  width: auto;
+  min-height: auto;
+}
 .activity-detail p {
   font-size: 13px;
   line-height: 1.8;

@@ -890,3 +890,290 @@ test("Consulta usa credenciales, lee contenidos y cambia su contraseña, sin per
     200,
   );
 });
+
+test("Solo el administrador edita cuentas; los cambios de acceso revocan sesiones y conservan la contraseña", async () => {
+  const user = {
+    username: "gestion-prueba",
+    name: "Funcionaria inicial",
+    password,
+    role: "Editor",
+  };
+  assert.equal(
+    (await request("/api/usuarios", "POST", user, admin)).status,
+    201,
+  );
+  const users = (
+    await (await request("/api/usuarios", "GET", undefined, admin)).json()
+  ).users;
+  const target = users.find(
+    (u: { username: string }) => u.username === user.username,
+  );
+  const initial = {
+    id: target.id,
+    name: target.name,
+    role: target.role,
+    active: true,
+  };
+  const session = await login(user.username),
+    otherSession = await login(user.username);
+  const database = db.db();
+  const hash = database
+    .prepare("SELECT password_hash FROM usuarios WHERE id=?")
+    .get(target.id)!.password_hash;
+  const activities = db.listActivities();
+  const files = (
+    await (await request("/api/media", "GET", undefined, admin)).json()
+  ).assets;
+  assert.equal((await request("/api/usuarios", "PUT", initial)).status, 401);
+  assert.equal(
+    (await request("/api/usuarios", "PUT", initial, session)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/usuarios",
+        "PUT",
+        initial,
+        admin,
+        "https://otro.example",
+      )
+    ).status,
+    403,
+  );
+  for (const invalid of [
+    { ...initial, id: "1" },
+    { ...initial, id: 0 },
+    { ...initial, role: "Invitado" },
+    { ...initial, role: "Superusuario" },
+    { ...initial, active: 1 },
+    { ...initial, active: "false" },
+    { ...initial, name: "" },
+  ])
+    assert.equal(
+      (await request("/api/usuarios", "PUT", invalid, admin)).status,
+      400,
+    );
+  assert.equal(
+    (await request("/api/usuarios", "PUT", { ...initial, id: 999999 }, admin))
+      .status,
+    404,
+  );
+  const same = await request("/api/usuarios", "PUT", initial, admin);
+  assert.equal(same.status, 200);
+  assert.equal((await same.json()).accessChanged, false);
+  const renamed = await request(
+    "/api/usuarios",
+    "PUT",
+    { ...initial, name: "Secretaria de prueba" },
+    admin,
+  );
+  assert.equal(renamed.status, 200);
+  assert.equal((await renamed.json()).accessChanged, false);
+  assert.equal(
+    (await (await request("/api/auth", "GET", undefined, session)).json()).user
+      .name,
+    "Secretaria de prueba",
+  );
+  const changed = await request(
+    "/api/usuarios",
+    "PUT",
+    { ...initial, name: "Secretaria de prueba", role: "Consulta" },
+    admin,
+  );
+  assert.equal(changed.status, 200);
+  assert.deepEqual(await changed.json(), {
+    ok: true,
+    accessChanged: true,
+    relogin: false,
+  });
+  for (const cookie of [session, otherSession])
+    assert.equal(
+      (await request("/api/auth", "GET", undefined, cookie)).status,
+      401,
+    );
+  const readOnly = await login(user.username);
+  assert.equal(
+    (await (await request("/api/auth", "GET", undefined, readOnly)).json()).user
+      .role,
+    "Consulta",
+  );
+  assert.equal(
+    (await request("/api/usuarios", "PUT", initial, readOnly)).status,
+    403,
+  );
+  assert.equal(
+    (await request("/api/jornadas", "POST", activity, readOnly)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/usuarios",
+        "PUT",
+        { ...initial, role: "Consulta", active: false },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/auth", "GET", undefined, readOnly)).status,
+    401,
+  );
+  assert.equal(
+    (
+      await request("/api/auth", "POST", {
+        action: "login",
+        username: user.username,
+        password,
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/usuarios",
+        "PUT",
+        { ...initial, role: "Consulta" },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/auth", "GET", undefined, readOnly)).status,
+    401,
+    "Reactivar no debe restaurar sesiones revocadas.",
+  );
+  const activated = await login(user.username);
+  assert.equal(
+    (await request("/api/media", "GET", undefined, activated)).status,
+    200,
+  );
+  assert.equal(
+    database
+      .prepare("SELECT password_hash FROM usuarios WHERE id=?")
+      .get(target.id)!.password_hash,
+    hash,
+  );
+  assert.deepEqual(db.listActivities(), activities);
+  assert.deepEqual(
+    (await (await request("/api/media", "GET", undefined, admin)).json())
+      .assets,
+    files,
+  );
+  const events = (
+    await (await request("/api/auditoria", "GET", undefined, admin)).json()
+  ).events;
+  const event = events.find(
+    (e: { event: string; detail: string }) =>
+      e.event === "usuario.actualizado" &&
+      JSON.parse(e.detail).username === user.username &&
+      JSON.parse(e.detail).after.active === false,
+  );
+  assert.equal(event.actor, "admin");
+  assert.equal(JSON.parse(event.detail).sessionsRevoked, true);
+  assert.ok(!event.detail.includes(password));
+});
+
+test("Se conserva un administrador activo ante cambios propios y solicitudes concurrentes", async () => {
+  const database = db.db();
+  const row = database
+    .prepare("SELECT id,name FROM usuarios WHERE username='admin'")
+    .get()!;
+  const original = {
+    id: Number(row.id),
+    name: String(row.name),
+    role: "Administrador",
+    active: true,
+  };
+  const backup = {
+    username: "admin-respaldo",
+    name: "Administrador de respaldo",
+    password,
+    role: "Administrador",
+  };
+  assert.equal(
+    (await request("/api/usuarios", "POST", backup, admin)).status,
+    201,
+  );
+  const backupId = Number(
+    database
+      .prepare("SELECT id FROM usuarios WHERE username=?")
+      .get(backup.username)!.id,
+  );
+  const backupValue = {
+    id: backupId,
+    name: backup.name,
+    role: "Administrador",
+    active: false,
+  };
+  assert.equal(
+    (await request("/api/usuarios", "PUT", backupValue, admin)).status,
+    200,
+  );
+  for (const change of [
+    { ...original, role: "Consulta" },
+    { ...original, active: false },
+  ]) {
+    const rejected = await request("/api/usuarios", "PUT", change, admin);
+    assert.equal(rejected.status, 409);
+    assert.match((await rejected.json()).error, /administrador activo/);
+  }
+  assert.equal(
+    (await request("/api/usuarios", "GET", undefined, admin)).status,
+    200,
+    "Un cambio rechazado conserva la sesión del administrador.",
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/usuarios",
+        "PUT",
+        { ...backupValue, active: true },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  const backupSession = await login(backup.username);
+  const responses = await Promise.all([
+    request("/api/usuarios", "PUT", { ...original, role: "Consulta" }, admin),
+    request(
+      "/api/usuarios",
+      "PUT",
+      { ...backupValue, role: "Consulta", active: true },
+      backupSession,
+    ),
+  ]);
+  assert.deepEqual(responses.map((r) => r.status).sort(), [200, 409]);
+  for (const response of responses)
+    if (response.status === 200)
+      assert.equal((await response.json()).relogin, true);
+  const remaining = database
+    .prepare(
+      "SELECT username FROM usuarios WHERE role='Administrador' AND active=1",
+    )
+    .all();
+  assert.equal(remaining.length, 1);
+  const remainingSession =
+    remaining[0].username === "admin" ? admin : backupSession;
+  assert.equal(
+    (await request("/api/usuarios", "PUT", original, remainingSession)).status,
+    200,
+  );
+  admin = await login("admin");
+  assert.equal(
+    (
+      await request(
+        "/api/usuarios",
+        "PUT",
+        { ...backupValue, role: "Consulta" },
+        admin,
+      )
+    ).status,
+    200,
+  );
+});

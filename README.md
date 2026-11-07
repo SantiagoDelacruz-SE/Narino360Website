@@ -50,6 +50,17 @@ base de datos por primera vez tras el despliegue, preservando IDs, hashes,
 roles anteriores y sesiones. Esta actualización no cambia los archivos cargados.
 Los cambios de contraseña revocan las demás sesiones del funcionario.
 
+Para editar una cuenta existente, ingresa como administrador a **Mi cuenta y
+acceso → Gestionar cuentas institucionales → Editar acceso**, junto al usuario.
+Puedes cambiar el nombre completo, seleccionar Administrador, Editor o Consulta,
+y marcar o desmarcar **Cuenta activa**. Pulsa **Guardar cambios** para aplicar.
+El nombre de usuario y la contraseña se conservan. Una cuenta inactiva no puede
+iniciar sesión. Los cambios de rol o estado revocan todas las sesiones de esa
+cuenta, incluso al reactivarla; tendrá que ingresar de nuevo. Si modificas tu
+propio acceso, volverás a la pantalla de ingreso. El servidor conserva al menos
+un administrador activo y registra los cambios en auditoría con sus valores
+anteriores y nuevos.
+
 ## Funcionalidades
 
 - Tablero con filtros por programa, municipio y fechas; exportación CSV de jornadas.

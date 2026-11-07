@@ -59,6 +59,14 @@ editores o administradores. Para el gobernador y los secretarios, selecciona
 pueden consultar y descargar contenidos y cambiar su contraseña. Después, carga jornadas, fotografías,
 PDF y diapositivas desde los módulos correspondientes.
 
+Para cambiar un acceso existente, abre **Editar acceso** junto a la cuenta.
+Selecciona el rol y el estado **Cuenta activa**, y pulsa **Guardar cambios**.
+Desmarcarla suspende el ingreso sin borrar la cuenta ni sus datos. Al cambiar
+rol o estado, sus sesiones se cierran. Para reactivar el acceso, vuelve a marcar
+**Cuenta activa**; el usuario inicia sesión con su contraseña habitual.
+Solo administradores pueden realizar estos cambios. No se permite desactivar
+ni quitar el rol al último administrador activo.
+
 ## Verificación
 
 - La URL HTTPS abre la pantalla de acceso.
