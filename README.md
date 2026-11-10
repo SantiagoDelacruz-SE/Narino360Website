@@ -63,8 +63,9 @@ anteriores y nuevos.
 
 ## Funcionalidades
 
-- Vista general con mapa de calor activo por defecto, leyenda de intensidad y
-  un mapa base atenuado para resaltar las intervenciones. Contadores separados
+- Vista general con puntos individuales de color, uno por registro, y leyenda
+  de intensidad relativa según las personas reportadas (azul, verde, amarillo y
+  rojo). El mapa base conserva su apariencia normal. Contadores separados
   de actividades (incluidas ferias) y operativos. Filtros por componente, tipo de
   registro, municipio y fechas; exportación CSV con el tipo de registro.
 - FONSET sustituye la navegación independiente de Mapa territorial. Muestra
@@ -76,15 +77,20 @@ anteriores y nuevos.
   recargar. El enlace antiguo `#territorio` abre Vista general y `#observatorio`
   abre los documentos del componente Observatorio.
 - Catálogo de los 64 municipios. Jornadas con coordenadas decimales y metas PISCC.
-- Mapa Leaflet (equivalente web de la cartografía Folium), agrupación de marcadores,
-  popups y calor ponderado por personas reportadas. Las teselas provienen de
+- Mapa Leaflet con un marcador por actividad, feria u operativo, sin agrupar ni
+  fusionar registros por coordenadas o cercanía. Al pulsar un punto se abre el
+  detalle completo de ese registro. Los símbolos coincidentes se separan en
+  pantalla, con líneas hacia la ubicación original; las coordenadas almacenadas
+  no cambian. El contador indica cuántos puntos corresponden a los registros de
+  la consulta. El diseño se recalcula al cambiar el zoom o el tamaño de pantalla.
+  Las teselas provienen de
   `tile.openstreetmap.org` y requieren acceso desde el navegador. Si no están
   disponibles, se conserva la consulta de coordenadas en los registros. Se envía
   únicamente el origen de la aplicación mediante
   `Referrer-Policy: strict-origin-when-cross-origin`, manteniendo la caché HTTP.
   El estado HTTP de cada imagen se comprueba antes de mostrarla: un 403 u otro
   fallo detiene la capa base, muestra un aviso y permite reintentar manualmente.
-  Los marcadores y el calor siguen disponibles; no se usan servidores alternos
+  Los puntos y sus detalles siguen disponibles; no se usan servidores alternos
   para eludir bloqueos del proveedor.
 - Registro y edición manual, importación JSON de hasta 200 jornadas por operación
   y extracción asistida de boletines de WhatsApp. La importación valida todas las

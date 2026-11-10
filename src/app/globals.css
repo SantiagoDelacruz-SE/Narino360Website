@@ -1855,17 +1855,6 @@ td small {
   border-radius: 50%;
   background: var(--green);
 }
-.marker-cluster-small,
-.marker-cluster-medium,
-.marker-cluster-large {
-  background: color-mix(in srgb, var(--black) 50.2%, transparent) !important;
-}
-.marker-cluster-small div,
-.marker-cluster-medium div,
-.marker-cluster-large div {
-  background: var(--green) !important;
-  color: white !important;
-}
 .map-popup {
   font-family: Arial, sans-serif;
   font-size: 11px;
@@ -2705,17 +2694,6 @@ td small {
 .legend-dot {
   background: var(--green);
 }
-.marker-cluster-small div,
-.marker-cluster-medium div,
-.marker-cluster-large div {
-  background: var(--yellow) !important;
-  color: var(--black) !important;
-}
-.marker-cluster-small,
-.marker-cluster-medium,
-.marker-cluster-large {
-  background: color-mix(in srgb, var(--green) 65%, transparent) !important;
-}
 .evidence-image > span {
   background: var(--blue);
   color: var(--white);
@@ -3052,20 +3030,6 @@ td small {
   content: "•";
   color: var(--green);
   margin-right: 6px;
-}
-.map-container.heat-view .leaflet-tile-pane {
-  opacity: 0.42;
-  filter: grayscale(0.6);
-}
-.map-container.heat-view .leaflet-map {
-  background: #fff;
-}
-.heat-scale {
-  display: inline-block;
-  width: 94px;
-  height: 9px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #80beff, #10a13b, #ffd500, #da1c24);
 }
 .map-legend > span:last-child {
   display: inline-flex;
@@ -3419,5 +3383,40 @@ td small {
   }
   .fonset-placeholder h2 {
     font-size: 23px;
+  }
+}
+
+.map-record-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--yellow) 25%, white);
+  border-radius: 6px;
+  text-align: right;
+}
+.point-color-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.point-color-scale i {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid #0002;
+}
+.map-point-note {
+  margin: 0;
+  padding: 0 18px 14px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .map-panel > .panel-heading {
+    flex-wrap: wrap;
+  }
+  .map-record-count {
+    text-align: left;
   }
 }

@@ -44,6 +44,7 @@ import {
   RECORD_TYPES,
   recordTypeOf,
   assetComponent,
+  hasLocation,
   type Component,
   type RecordType,
   REFERENCES,
@@ -62,6 +63,7 @@ import MediaUpload from "./media-upload";
 import Presentation from "./presentation";
 import ComponentsHub from "./components-hub";
 import PdfPreview from "./pdf-preview";
+import { MAP_COLORS } from "@/lib/map-points";
 const TerritoryMap = dynamic(() => import("./territory-map"), {
   ssr: false,
   loading: () => <div className="map-loading">Preparando cartografía…</div>,
@@ -121,8 +123,7 @@ export default function Observatory({
     [until, setUntil] = useState("");
   const [recordType, setRecordType] = useState("");
   const [component, setComponent] = useState<Component | null>(null);
-  const [heat, setHeat] = useState(true),
-    [columns, setColumns] = useState(3),
+  const [columns, setColumns] = useState(3),
     [modal, setModal] = useState<ModalState>(null),
     [toast, setToast] = useState(""),
     [error, setError] = useState("");
@@ -674,8 +675,7 @@ export default function Observatory({
               <div className="territory-grid">
                 <MapPanel
                   activities={territorial}
-                  heat={heat}
-                  setHeat={setHeat}
+                  onOpen={(activity) => setModal({ type: "detail", activity })}
                 />
                 <aside className="panel coverage-panel">
                   <div className="panel-heading">
@@ -721,14 +721,13 @@ export default function Observatory({
                   <button
                     className="text-link"
                     onClick={() => {
-                      setHeat(true);
                       document.querySelector(".map-panel")?.scrollIntoView({
                         behavior: "smooth",
                         block: "center",
                       });
                     }}
                   >
-                    Ver mapa de calor
+                    Ver puntos en el mapa
                     <ArrowRight size={15} />
                   </button>
                 </aside>
@@ -1815,54 +1814,46 @@ function Audit() {
 
 function MapPanel({
   activities,
-  heat,
-  setHeat,
-  large = false,
+  onOpen,
 }: {
   activities: Activity[];
-  heat: boolean;
-  setHeat: (v: boolean) => void;
-  large?: boolean;
+  onOpen: (activity: Activity) => void;
 }) {
+  const located = activities
+    .filter((a) => recordTypeOf(a) !== "Noticia")
+    .filter(hasLocation);
   return (
     <section className="panel map-panel">
       <div className="panel-heading">
         <div>
           <h2>Presencia en el territorio</h2>
-          <p>Distribución geográfica de actividades, ferias y operativos</p>
+          <p>Actividades, ferias y operativos · un punto por registro</p>
         </div>
-        <div className="segmented">
-          <button
-            className={!heat ? "selected" : ""}
-            onClick={() => setHeat(false)}
-          >
-            Marcadores
-          </button>
-          <button
-            className={heat ? "selected" : ""}
-            onClick={() => setHeat(true)}
-          >
-            Mapa de calor
-          </button>
-        </div>
+        <span className="map-record-count" role="status">
+          {number(located.length)} puntos · {number(activities.length)}{" "}
+          registros en esta consulta
+        </span>
       </div>
-      <TerritoryMap activities={activities} heat={heat} large={large} />
+      <TerritoryMap activities={activities} onOpen={onOpen} />
       <div className="map-legend">
-        <span>
-          <i className="legend-dot" />
-          Intervenciones registradas
-        </span>
-        <span>
-          {heat ? (
-            <>
-              <span className="heat-scale" aria-hidden="true" />
-              Menor a mayor intensidad · personas reportadas
-            </>
-          ) : (
-            "Marcadores agrupados · selecciona para ver resultados"
-          )}
+        <span>Cada punto abre una actividad u operativo</span>
+        <span className="point-color-scale">
+          Menor{" "}
+          {MAP_COLORS.map((color) => (
+            <i key={color} style={{ backgroundColor: color }} />
+          ))}{" "}
+          Mayor · personas reportadas
         </span>
       </div>
+      <p className="map-point-note">
+        Los colores comparan las personas reportadas en esta consulta. Los
+        puntos coincidentes se separan para poder seleccionarlos; las líneas
+        señalan su ubicación original.
+        {located.length < activities.length &&
+          " Hay " +
+            (activities.length - located.length) +
+            " registros sin coordenadas en esta consulta; puedes completarlas desde Editar."}
+      </p>
     </section>
   );
 }

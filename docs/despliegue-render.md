@@ -75,7 +75,9 @@ ni quitar el rol al último administrador activo.
   cambia su contraseña, sin controles para editar, cargar o eliminar información.
 - El administrador puede iniciar sesión y registrar una jornada.
 - Una fotografía cargada aparece en el mural y una diapositiva en el carrusel.
-- Vista general abre el mapa de calor con sus colores y leyenda. Los contadores
+- Vista general abre puntos individuales de color y su leyenda, sin grupos que
+  oculten actividades coincidentes. Al pulsar cada punto aparece su registro.
+  Los contadores
   distinguen actividades de operativos y FONSET muestra **En construcción**.
 - Componentes muestra Observatorio, PISCC, Banco de Alimentos, Cultivos para la
   Paz y Acción Unificada, con sus registros y documentos correspondientes.

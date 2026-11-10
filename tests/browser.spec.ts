@@ -63,11 +63,6 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
       exact: true,
     }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Mapa de calor", exact: true })
-    .click();
-  await expect(page.locator(".leaflet-heatmap-layer")).toBeVisible();
-  await page.getByRole("button", { name: "Marcadores", exact: true }).click();
   await expect(page.locator(".territory-marker")).toBeVisible();
   await page
     .getByRole("button", { name: "Mural de evidencias", exact: true })
@@ -439,7 +434,6 @@ test("El mapa identifica su origen, carga teselas válidas y maneja 403 sin dibu
   ).toBeVisible();
   await expect(page.locator(".map-feedback")).toContainText("HTTP 403");
   await expect(page.locator(".leaflet-tile-pane img")).toHaveCount(0);
-  await page.getByRole("button", { name: "Marcadores", exact: true }).click();
   await expect
     .poll(() => page.locator(".territory-marker").count())
     .toBeGreaterThan(0);
@@ -455,10 +449,9 @@ test("El mapa identifica su origen, carga teselas válidas y maneja 403 sin dibu
     .click();
   await expect.poll(() => images.count()).toBeGreaterThan(0);
   await expect(page.locator(".map-feedback")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Mapa de calor", exact: true })
-    .click();
-  await expect(page.locator(".leaflet-heatmap-layer")).toBeVisible();
+  await expect
+    .poll(() => page.locator(".territory-marker").count())
+    .toBeGreaterThan(0);
   await expect.poll(() => images.count()).toBeGreaterThan(0);
   mode = "offline";
   await page.reload();
@@ -1208,9 +1201,9 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
     .getByLabel("Contraseña", { exact: true })
     .fill("Clave-Solo-Pruebas-2026");
   await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
-  await expect(page.locator(".map-container")).toHaveClass(/heat-view/);
-  await expect(page.locator(".leaflet-heatmap-layer")).toBeVisible();
-  await expect(page.locator(".heat-scale")).toBeVisible();
+  await expect(page.locator(".map-container")).toHaveClass(/point-map/);
+  await expect(page.locator(".leaflet-heatmap-layer")).toHaveCount(0);
+  await expect(page.locator(".point-color-scale")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Mapa territorial", exact: true }),
   ).toHaveCount(0);
@@ -1322,7 +1315,7 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
   await expect(kpi("Actividades ejecutadas")).toHaveText(String(before + 1));
   await page.locator(".map-panel").scrollIntoViewIfNeeded();
   await page.screenshot({
-    path: testInfo.outputPath("mapa-calor-contraste.png"),
+    path: testInfo.outputPath("mapa-puntos-color.png"),
     fullPage: true,
     animations: "disabled",
   });
@@ -1494,5 +1487,168 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("36 registros coincidentes tienen 36 puntos seleccionables con colores y coordenadas intactas", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const tile = await sharp({
+    create: { width: 256, height: 256, channels: 3, background: "#e9f1f3" },
+  })
+    .png()
+    .toBuffer();
+  await page.route("https://tile.openstreetmap.org/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/png",
+      headers: { "access-control-allow-origin": "*" },
+      body: tile,
+    }),
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const records = Array.from({ length: 36 }, (_, index) => ({
+    title: "Registro individual " + String(index + 1).padStart(2, "0"),
+    recordType: index % 3 === 0 ? "Operativo" : "Actividad",
+    date: "2026-11-10",
+    municipality: "Pasto",
+    program: "Acción Unificada",
+    latitude: 1.2136,
+    longitude: -77.2811,
+    people: [0, 50, 75, 100][index % 4],
+    families: 0,
+    weaponsSeized: 0,
+    weaponsVoluntary: 0,
+    objective: "Verificar registros independientes",
+    summary: "Resumen exclusivo del registro " + (index + 1),
+    pisccGoal: "Meta " + (index + 1),
+  }));
+  const origin = new URL(page.url()).origin;
+  const saved = await page.request.post("/api/jornadas", {
+    headers: { origin },
+    data: records,
+  });
+  expect(saved.status()).toBe(201);
+  const before = (
+    await (await page.request.get("/api/jornadas")).json()
+  ).activities.filter(
+    (a: { program: string }) => a.program === "Acción Unificada",
+  );
+  expect(before).toHaveLength(36);
+  await page.reload();
+  await page
+    .getByRole("combobox", { name: "Componente", exact: true })
+    .selectOption("Acción Unificada");
+  const markers = page.locator(".territory-marker");
+  await expect(markers).toHaveCount(36);
+  await expect(page.locator(".map-record-count")).toContainText(
+    "36 puntos · 36 registros",
+  );
+  await expect(
+    page.locator(".marker-cluster, .leaflet-heatmap-layer"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Mapa de calor", exact: true }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      markers.evaluateAll((items) => {
+        const centers = items.map((item) => {
+          const r = item.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        });
+        return Math.min(
+          ...centers.flatMap((a, i) =>
+            centers.slice(i + 1).map((b) => Math.hypot(a.x - b.x, a.y - b.y)),
+          ),
+        );
+      }),
+    )
+    .toBeGreaterThanOrEqual(27);
+  const colors = await markers
+    .locator("span")
+    .evaluateAll((dots) =>
+      [
+        ...new Set(dots.map((dot) => getComputedStyle(dot).backgroundColor)),
+      ].sort(),
+    );
+  expect(colors).toEqual(
+    [
+      "rgb(128, 190, 255)",
+      "rgb(16, 161, 59)",
+      "rgb(218, 28, 36)",
+      "rgb(255, 213, 0)",
+    ].sort(),
+  );
+  await page.locator(".map-panel").screenshot({
+    path: testInfo.outputPath("36-puntos-individuales.png"),
+    animations: "disabled",
+  });
+  for (const record of before) {
+    await page
+      .locator('.territory-marker[data-activity-id="' + record.id + '"]')
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("heading", { name: record.title, exact: true }),
+    ).toBeVisible();
+    await expect(dialog).toContainText(record.summary);
+    await expect(dialog).toContainText("1.2136, -77.2811");
+    await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  }
+  const first = before[0];
+  await page
+    .locator('.territory-marker[data-activity-id="' + first.id + '"]')
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("heading", { name: first.title, exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cerrar", exact: true })
+    .click();
+  await page.locator(".leaflet-control-zoom-in").click();
+  await expect(markers).toHaveCount(36);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      markers.evaluateAll((items) => {
+        const centers = items.map((item) => {
+          const r = item.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        });
+        return Math.min(
+          ...centers.flatMap((a, i) =>
+            centers.slice(i + 1).map((b) => Math.hypot(a.x - b.x, a.y - b.y)),
+          ),
+        );
+      }),
+    )
+    .toBeGreaterThanOrEqual(27);
+  await expect(markers.first()).toBeVisible();
+  const after = (
+    await (await page.request.get("/api/jornadas")).json()
+  ).activities.filter(
+    (a: { program: string }) => a.program === "Acción Unificada",
+  );
+  expect(after).toEqual(before);
   expect(errors).toEqual([]);
 });
