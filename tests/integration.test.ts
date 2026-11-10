@@ -177,14 +177,17 @@ test("Los componentes y tipos se guardan sin reclasificar registros anteriores; 
     ]),
     "PISCC",
   );
-  assert.throws(() =>
-    validateActivity({
+  for (const recordType of ["Actividad", "Operativo", "Feria", "Noticia"]) {
+    const municipalReference = validateActivity({
       ...activity,
-      recordType: "Operativo",
+      recordType,
       latitude: null,
       longitude: null,
-    }),
-  );
+    });
+    assert.equal(municipalReference.latitude, null);
+    assert.equal(municipalReference.longitude, null);
+    assert.equal(municipalReference.municipality, "Pasto");
+  }
   for (const recordType of [null, "Otra cosa", 5])
     assert.throws(() => validateActivity({ ...activity, recordType }));
   assert.throws(() =>

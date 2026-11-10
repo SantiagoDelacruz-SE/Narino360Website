@@ -1201,9 +1201,9 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
     .getByLabel("Contraseña", { exact: true })
     .fill("Clave-Solo-Pruebas-2026");
   await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
-  await expect(page.locator(".map-container")).toHaveClass(/point-map/);
+  await expect(page.locator(".map-container")).toHaveClass(/action-map/);
   await expect(page.locator(".leaflet-heatmap-layer")).toHaveCount(0);
-  await expect(page.locator(".point-color-scale")).toBeVisible();
+  await expect(page.locator(".municipal-legend")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Mapa territorial", exact: true }),
   ).toHaveCount(0);
@@ -1285,8 +1285,12 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
       .getByLabel("Municipio", { exact: true })
       .selectOption(item.municipality);
     if (item.type !== "Noticia") {
-      await dialog.getByLabel("Latitud", { exact: true }).fill(item.lat);
-      await dialog.getByLabel("Longitud", { exact: true }).fill(item.lng);
+      await dialog
+        .getByLabel("Latitud de referencia (opcional)", { exact: true })
+        .fill(item.lat);
+      await dialog
+        .getByLabel("Longitud de referencia (opcional)", { exact: true })
+        .fill(item.lng);
     }
     await dialog
       .getByLabel("Objetivo", { exact: true })
@@ -1490,7 +1494,7 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
   expect(errors).toEqual([]);
 });
 
-test("36 registros coincidentes tienen 36 puntos seleccionables con colores y coordenadas intactas", async ({
+test("acciones y recurrencia municipal conservan los 36 registros sin inventar lugares", async ({
   page,
 }, testInfo) => {
   test.setTimeout(120000);
@@ -1523,167 +1527,146 @@ test("36 registros coincidentes tienen 36 puntos seleccionables con colores y co
     }),
   ).toBeVisible();
   const records = Array.from({ length: 36 }, (_, index) => ({
-    title: "Registro individual " + String(index + 1).padStart(2, "0"),
-    recordType: index % 3 === 0 ? "Operativo" : "Actividad",
+    title: "Registro municipal exclusivo " + (index + 1),
     date: "2026-11-10",
-    municipality: "Pasto",
+    municipality: index < 28 ? "Pasto" : "Tumaco",
     program: "Acción Unificada",
-    latitude: 1.2136,
-    longitude: -77.2811,
-    people: [0, 50, 75, 100][index % 4],
+    recordType: ["Actividad", "Operativo", "Feria"][index % 3],
+    latitude: index === 0 ? null : 1.2136,
+    longitude: index === 0 ? null : -77.2811,
+    people: index < 28 ? 0 : 10000,
     families: 0,
     weaponsSeized: 0,
     weaponsVoluntary: 0,
-    objective: "Verificar registros independientes",
+    objective: "Verificar referencias municipales",
     summary: "Resumen exclusivo del registro " + (index + 1),
     pisccGoal: "Meta " + (index + 1),
   }));
-  const origin = new URL(page.url()).origin;
   const saved = await page.request.post("/api/jornadas", {
-    headers: { origin },
+    headers: { origin: new URL(page.url()).origin },
     data: records,
   });
   expect(saved.status()).toBe(201);
-  const before = (
-    await (await page.request.get("/api/jornadas")).json()
-  ).activities.filter(
-    (a: { program: string }) => a.program === "Acción Unificada",
-  );
+  const readRecords = async () =>
+    (await (await page.request.get("/api/jornadas")).json()).activities.filter(
+      (a: { program: string }) => a.program === "Acción Unificada",
+    );
+  const before = await readRecords();
   expect(before).toHaveLength(36);
   await page.reload();
   await page
     .getByRole("combobox", { name: "Componente", exact: true })
     .selectOption("Acción Unificada");
-  const markers = page.locator(".territory-marker");
-  await expect(markers).toHaveCount(36);
+  const markers = page.locator(".municipal-marker");
+  const rows = page.locator(".map-record-list .map-record");
+  await expect(markers).toHaveCount(2);
+  await expect(rows).toHaveCount(36);
   await expect(page.locator(".map-record-count")).toContainText(
-    "36 puntos · 36 registros",
+    "36 acciones · 2 de 64 municipios",
   );
-  await expect(
-    page.locator(".marker-cluster, .leaflet-heatmap-layer"),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Mapa de calor", exact: true }),
-  ).toHaveAttribute("aria-pressed", "false");
-  await expect
-    .poll(() =>
-      markers.evaluateAll((items) => {
-        const centers = items.map((item) => {
-          const r = item.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        });
-        return Math.min(
-          ...centers.flatMap((a, i) =>
-            centers.slice(i + 1).map((b) => Math.hypot(a.x - b.x, a.y - b.y)),
-          ),
-        );
-      }),
-    )
-    .toBeGreaterThanOrEqual(27);
-  const colors = await markers
-    .locator("span")
-    .evaluateAll((dots) =>
-      [
-        ...new Set(dots.map((dot) => getComputedStyle(dot).backgroundColor)),
-      ].sort(),
-    );
-  expect(colors).toEqual(
-    [
-      "rgb(128, 190, 255)",
-      "rgb(16, 161, 59)",
-      "rgb(218, 28, 36)",
-      "rgb(255, 213, 0)",
-    ].sort(),
+  await expect(page.locator("path[data-municipality]")).toHaveCount(64);
+  const pasto = page.locator('.municipal-marker[data-municipality="Pasto"]');
+  const tumaco = page.locator('.municipal-marker[data-municipality="Tumaco"]');
+  expect(await pasto.getAttribute("data-anchor")).not.toBe(
+    await tumaco.getAttribute("data-anchor"),
   );
-  await page.locator(".map-panel").screenshot({
-    path: testInfo.outputPath("36-puntos-individuales.png"),
-    animations: "disabled",
-  });
+  await expect(pasto).toHaveAttribute("aria-label", /referencia municipal/i);
+  await pasto.click();
+  await expect(rows).toHaveCount(28);
+  await expect(
+    page.getByLabel("Explorar municipio", { exact: true }),
+  ).toHaveValue("Pasto");
+  await page.getByRole("button", { name: "Ver todos", exact: true }).click();
+  await expect(rows).toHaveCount(36);
   for (const record of before) {
     await page
-      .locator('.territory-marker[data-activity-id="' + record.id + '"]')
+      .locator('.map-record[data-activity-id="' + record.id + '"]')
       .click();
     const dialog = page.getByRole("dialog");
     await expect(
       dialog.getByRole("heading", { name: record.title, exact: true }),
     ).toBeVisible();
     await expect(dialog).toContainText(record.summary);
-    await expect(dialog).toContainText("1.2136, -77.2811");
     await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
   }
-  const first = before[0];
+  await page.locator(".map-record-list").evaluate((list) => {
+    list.scrollTop = 0;
+  });
+  await page.locator(".map-panel").screenshot({
+    path: testInfo.outputPath("acciones-36-registros.png"),
+    animations: "disabled",
+  });
   await page
-    .locator('.territory-marker[data-activity-id="' + first.id + '"]')
-    .focus();
-  await page.keyboard.press("Enter");
+    .getByRole("button", { name: "Mapa de calor", exact: true })
+    .click();
+  await expect(markers).toHaveCount(0);
+  await expect(page.locator('path[data-municipality="Pasto"]')).toHaveAttribute(
+    "fill",
+    "#DA1C24",
+  );
   await expect(
-    page
-      .getByRole("dialog")
-      .getByRole("heading", { name: first.title, exact: true }),
+    page.locator('path[data-municipality="Tumaco"]'),
+  ).toHaveAttribute("fill", "#FFD500");
+  await expect(
+    page.locator('path[data-municipality="Ipiales"]'),
+  ).toHaveAttribute("fill", "#FFFFFF");
+  await expect(page.locator(".map-record-count")).toContainText(
+    "36 acciones · 2 de 64 municipios",
+  );
+  await expect(rows).toHaveCount(36);
+  await expect(page.locator(".municipal-legend")).toContainText(
+    "Acciones por municipio",
+  );
+  await page
+    .getByLabel("Explorar municipio", { exact: true })
+    .selectOption("Tumaco");
+  await expect(rows).toHaveCount(8);
+  await page.locator(".map-record-list").evaluate((list) => {
+    list.scrollTop = 0;
+  });
+  await page.locator(".map-panel").screenshot({
+    path: testInfo.outputPath("recurrencia-36-registros.png"),
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", { name: "Mapa de acciones", exact: true })
+    .click();
+  await expect(markers).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      page.locator(".leaflet-map").evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return [...element.querySelectorAll("path[data-municipality]")].every(
+          (path) => {
+            const bounds = path.getBoundingClientRect();
+            return (
+              bounds.left >= box.left &&
+              bounds.right <= box.right &&
+              bounds.top >= box.top &&
+              bounds.bottom <= box.bottom
+            );
+          },
+        );
+      }),
+    )
+    .toBe(true);
+  await expect(
+    page.getByLabel("Explorar municipio", { exact: true }),
   ).toBeVisible();
+  await page.getByLabel("Explorar municipio", { exact: true }).selectOption("");
+  await expect(rows).toHaveCount(36);
+  await rows.first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Cerrar", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Mapa de calor", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Mapa de calor", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  const heatCanvas = page.locator(".leaflet-heatmap-layer");
-  await expect(heatCanvas).toBeVisible();
-  await expect(markers).toHaveCount(0);
-  await expect(page.locator(".map-record-count")).toContainText(
-    "36 registros · mapa de calor",
-  );
-  await expect
-    .poll(() =>
-      heatCanvas.evaluate((canvas: HTMLCanvasElement) => {
-        const data = canvas
-          .getContext("2d")!
-          .getImageData(0, 0, canvas.width, canvas.height).data;
-        for (let i = 3; i < data.length; i += 4) if (data[i] > 80) return true;
-        return false;
-      }),
-    )
-    .toBe(true);
-  await page
-    .locator(".map-panel")
-    .screenshot({
-      path: testInfo.outputPath("36-registros-mapa-calor.png"),
-      animations: "disabled",
-    });
-  await page
-    .getByRole("button", { name: "Puntos individuales", exact: true })
-    .click();
-  await expect(markers).toHaveCount(36);
-  await expect(heatCanvas).toHaveCount(0);
-  await expect(page.locator(".marker-cluster")).toHaveCount(0);
-  await page.locator(".leaflet-control-zoom-in").click();
-  await expect(markers).toHaveCount(36);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect
-    .poll(() =>
-      markers.evaluateAll((items) => {
-        const centers = items.map((item) => {
-          const r = item.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        });
-        return Math.min(
-          ...centers.flatMap((a, i) =>
-            centers.slice(i + 1).map((b) => Math.hypot(a.x - b.x, a.y - b.y)),
-          ),
-        );
-      }),
-    )
-    .toBeGreaterThanOrEqual(27);
-  await expect(markers.first()).toBeVisible();
-  const after = (
-    await (await page.request.get("/api/jornadas")).json()
-  ).activities.filter(
-    (a: { program: string }) => a.program === "Acción Unificada",
-  );
-  expect(after).toEqual(before);
+  await page.locator(".map-panel").screenshot({
+    path: testInfo.outputPath("acciones-movil.png"),
+    animations: "disabled",
+  });
+  expect(await readRecords()).toEqual(before);
   expect(errors).toEqual([]);
 });

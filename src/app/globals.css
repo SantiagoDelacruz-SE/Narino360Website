@@ -3438,3 +3438,308 @@ td small {
     align-items: flex-start;
   }
 }
+
+/* Municipal coverage and recurrence share the same geographic reference. */
+.municipal-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 285px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.municipal-cartography {
+  min-width: 0;
+}
+.municipal-map-panel .map-container,
+.municipal-map-panel .map-loading {
+  height: 560px;
+}
+.municipal-map-panel .leaflet-tile-pane {
+  opacity: 0.4;
+  filter: saturate(0.55);
+}
+.municipal-map-panel .heat-view .leaflet-tile-pane {
+  opacity: 0.25;
+}
+.municipal-map-panel .map-view-controls .segmented button {
+  font-size: 11px;
+  padding: 8px 12px;
+}
+.municipal-map-panel .map-record-count {
+  text-align: left;
+}
+.municipal-records {
+  background: var(--white);
+  border-left: 1px solid var(--border);
+  padding: 16px 12px 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.municipal-selector {
+  display: grid;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.municipal-list-hint {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 9px;
+}
+.municipal-records select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--white);
+  padding: 6px;
+  color: var(--ink);
+}
+.municipal-list-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 12px;
+}
+.municipal-list-heading h3 {
+  font-size: 14px;
+  margin: 0;
+  flex: 1 1 100%;
+}
+.municipal-list-heading > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.municipal-reset {
+  color: var(--blue);
+  background: none;
+  border: 0;
+  padding: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.map-record-list {
+  overflow-y: auto;
+  max-height: 440px;
+  padding-right: 4px;
+  padding-bottom: 12px;
+}
+.map-record {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 9px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.map-record:hover {
+  background: var(--surface);
+  border-color: var(--green);
+}
+.map-record:focus-visible,
+.municipal-reset:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.map-record strong {
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.map-record > span {
+  font-size: 10px;
+  line-height: 1.5;
+}
+.map-record .map-record-open {
+  color: var(--blue);
+  font-weight: 700;
+}
+.map-record-type {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.municipal-legend {
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.municipal-legend > strong {
+  flex: 1 1 100%;
+  font-size: 11px;
+}
+.municipal-legend span,
+.municipal-component-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.municipal-legend i,
+.municipal-component-summary i,
+.map-record-type i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid #0003;
+}
+.municipal-legend .coverage-key {
+  flex: 1 1 100%;
+}
+.municipal-legend .coverage-key i {
+  border-radius: 2px;
+}
+.municipal-component-summary {
+  display: grid;
+  gap: 6px;
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+.municipal-empty {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.municipal-map-panel .territory-marker {
+  border: 0;
+  background: transparent;
+  box-shadow: 0 2px 5px #0005;
+}
+.municipal-ring {
+  width: 30px;
+  height: 30px;
+  padding: 4px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.municipal-ring strong {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #000;
+}
+.municipal-marker-selected {
+  outline: 3px solid #000;
+  outline-offset: 2px;
+}
+.municipal-marker:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.municipal-map-panel .map-feedback {
+  position: static;
+  transform: none;
+  width: auto;
+  margin: 10px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+.municipal-map-panel .map-feedback p {
+  margin: 4px 0 8px;
+}
+.municipal-map-panel .map-point-note {
+  padding-top: 14px;
+}
+.cartography-source {
+  margin: 0;
+  padding: 0 18px 14px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+@media (max-width: 1150px) {
+  .municipal-map-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .municipal-records {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+  .map-record-list {
+    max-height: 300px;
+  }
+  .municipal-map-panel .map-container,
+  .municipal-map-panel .map-loading {
+    height: 490px;
+  }
+}
+@media (max-width: 600px) {
+  .municipal-map-panel .map-container,
+  .municipal-map-panel .map-loading {
+    height: 440px;
+  }
+  .municipal-map-panel .map-view-controls .segmented button {
+    padding: 8px;
+    font-size: 10px;
+  }
+  .municipal-map-panel .panel-heading {
+    padding: 18px 14px;
+  }
+}
+@media screen {
+  .territory-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .territory-grid .coverage-panel {
+    display: grid;
+    grid-template-columns: 1.3fr 120px 1fr 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+  }
+  .territory-grid .coverage-panel .panel-heading {
+    padding: 0;
+  }
+  .territory-grid .coverage-ring {
+    width: 100px;
+    height: 100px;
+    margin: 0;
+  }
+  .territory-grid .coverage-ring > div {
+    width: 82px;
+    height: 82px;
+  }
+  .territory-grid .coverage-summary {
+    padding: 8px 0;
+  }
+  .territory-grid .coverage-note {
+    grid-column: 1 / -1;
+    padding: 0;
+    margin: 0;
+  }
+  .territory-grid .coverage-panel .text-link {
+    grid-column: 1 / -1;
+    padding: 8px 0 0;
+  }
+}
+@media screen and (max-width: 700px) {
+  .territory-grid .coverage-panel {
+    grid-template-columns: 1fr 100px;
+    padding: 16px;
+  }
+}
+@media screen {
+  .territory-grid .coverage-ring strong {
+    font-size: 22px;
+  }
+}

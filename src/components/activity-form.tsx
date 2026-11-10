@@ -247,37 +247,35 @@ export default function ActivityForm({
             />
           </label>
           <label>
-            Latitud
+            Latitud de referencia (opcional)
             <input
               name="latitude"
               type="number"
               step="any"
               min="0"
               max="3.5"
-              required={draft.recordType !== "Noticia"}
               {...field("latitude")}
               placeholder="Ej. 1.21"
             />
           </label>
           <label>
-            Longitud
+            Longitud de referencia (opcional)
             <input
               name="longitude"
               type="number"
               step="any"
               min="-79.5"
               max="-75.5"
-              required={draft.recordType !== "Noticia"}
               {...field("longitude")}
               placeholder="Ej. -77.28"
             />
           </label>
         </div>
         <p className="form-help">
-          Usa coordenadas decimales de la ubicación real. La validación de rango
-          es aproximada y no certifica límites municipales.
-          {draft.recordType === "Noticia" &&
-            " Para noticias, puedes dejar ambas coordenadas vacías. No se incluirán en el mapa ni en los indicadores de intervenciones."}
+          El mapa usa el municipio seleccionado. Puedes dejar ambas coordenadas
+          vacías o conservar una referencia municipal en formato decimal; no se
+          presenta como lugar exacto de ejecución. Las noticias no se incluyen
+          en el mapa ni en los indicadores de intervenciones.
         </p>
         <div className="form-section-title">Resultados de la intervención</div>
         <div className="field-grid">

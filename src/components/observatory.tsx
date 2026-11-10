@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- private HD evidence uses authenticated original URLs */
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -44,7 +43,6 @@ import {
   RECORD_TYPES,
   recordTypeOf,
   assetComponent,
-  hasLocation,
   type Component,
   type RecordType,
   REFERENCES,
@@ -63,11 +61,7 @@ import MediaUpload from "./media-upload";
 import Presentation from "./presentation";
 import ComponentsHub from "./components-hub";
 import PdfPreview from "./pdf-preview";
-import { MAP_COLORS } from "@/lib/map-points";
-const TerritoryMap = dynamic(() => import("./territory-map"), {
-  ssr: false,
-  loading: () => <div className="map-loading">Preparando cartografía…</div>,
-});
+import MapPanel from "./municipal-map-panel";
 const navigation = [
   { id: "resumen", label: "Vista general", icon: LayoutDashboard },
   { id: "fonset", label: "FONSET", icon: Building2 },
@@ -727,7 +721,7 @@ export default function Observatory({
                       });
                     }}
                   >
-                    Ver puntos en el mapa
+                    Explorar municipios en el mapa
                     <ArrowRight size={15} />
                   </button>
                 </aside>
@@ -1286,7 +1280,7 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
         <span>
           {a.latitude === null || a.longitude === null
             ? "Sin coordenadas registradas"
-            : a.latitude + ", " + a.longitude}
+            : "Referencia municipal guardada: " + a.latitude + ", " + a.longitude}
         </span>
       </div>
       <h3>Objetivo</h3>
@@ -1812,82 +1806,6 @@ function Audit() {
   );
 }
 
-function MapPanel({
-  activities,
-  onOpen,
-}: {
-  activities: Activity[];
-  onOpen: (activity: Activity) => void;
-}) {
-  const [heat, setHeat] = useState(false);
-  const located = activities
-    .filter((a) => recordTypeOf(a) !== "Noticia")
-    .filter(hasLocation);
-  return (
-    <section className="panel map-panel">
-      <div className="panel-heading">
-        <div>
-          <h2>Presencia en el territorio</h2>
-          <p>Actividades, ferias y operativos · un punto por registro</p>
-        </div>
-        <div className="map-view-controls">
-          <div className="segmented" role="group" aria-label="Vista del mapa">
-            <button
-              className={!heat ? "selected" : ""}
-              aria-pressed={!heat}
-              onClick={() => setHeat(false)}
-            >
-              Puntos individuales
-            </button>
-            <button
-              className={heat ? "selected" : ""}
-              aria-pressed={heat}
-              onClick={() => setHeat(true)}
-            >
-              Mapa de calor
-            </button>
-          </div>
-          <span className="map-record-count" role="status">
-            {heat
-              ? number(located.length) + " registros · mapa de calor"
-              : number(located.length) +
-                " puntos · " +
-                number(activities.length) +
-                " registros en esta consulta"}
-          </span>
-        </div>
-      </div>
-      <TerritoryMap activities={activities} onOpen={onOpen} heat={heat} />
-      <div className="map-legend">
-        <span>
-          {heat
-            ? "Intensidad geográfica en las ubicaciones registradas"
-            : "Cada punto abre una actividad u operativo"}
-        </span>
-        <span className="point-color-scale">
-          Menor{" "}
-          {heat ? (
-            <i className="heat-color-scale" />
-          ) : (
-            MAP_COLORS.map((color) => (
-              <i key={color} style={{ backgroundColor: color }} />
-            ))
-          )}{" "}
-          Mayor · personas reportadas
-        </span>
-      </div>
-      <p className="map-point-note">
-        {heat
-          ? "El calor representa las personas reportadas en las coordenadas originales. Los registros sin cifras conservan una intensidad mínima de presencia. Usa «Puntos individuales» para abrir cada actividad u operativo."
-          : "Los colores comparan las personas reportadas en esta consulta. Los puntos coincidentes se separan para poder seleccionarlos; las líneas señalan su ubicación original."}
-        {located.length < activities.length &&
-          " Hay " +
-            (activities.length - located.length) +
-            " registros sin coordenadas en esta consulta; puedes completarlas desde Editar."}
-      </p>
-    </section>
-  );
-}
 function ActivityTable({
   rows,
   compact = false,

@@ -1,44 +1,58 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { hasLocation, recordTypeOf, type Activity } from "@/lib/domain";
-import { MAP_COLORS, pointColor, separatePoints } from "@/lib/map-points";
+import type { FeatureCollection } from "geojson";
+import {
+  cartography,
+  componentRing,
+  recurrenceColor,
+  type MunicipalSummary,
+} from "@/lib/municipal-map";
 import { createOsmLayer } from "./osm-layer";
 import "leaflet/dist/leaflet.css";
 
 type Props = {
-  activities: Activity[];
-  onOpen: (activity: Activity) => void;
-  heat?: boolean;
-  large?: boolean;
+  summaries: MunicipalSummary[];
+  onSelect: (municipality: string) => void;
+  selectedMunicipality: string;
+  heat: boolean;
 };
 export default function TerritoryMap({
-  activities,
-  onOpen,
-  heat = false,
-  large,
+  summaries,
+  onSelect,
+  selectedMunicipality,
+  heat,
 }: Props) {
-  const element = useRef<HTMLDivElement>(null),
-    open = useRef(onOpen);
+  const element = useRef<HTMLDivElement>(null);
+  const select = useRef(onSelect);
+  const selected = useRef(selectedMunicipality);
+  const updateSelection = useRef<() => void>(() => {});
   const [tileError, setTileError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    open.current = onOpen;
-  }, [onOpen]);
+    select.current = onSelect;
+  }, [onSelect]);
+  useEffect(() => {
+    selected.current = selectedMunicipality;
+    updateSelection.current();
+  }, [selectedMunicipality]);
   useEffect(() => {
     let cleanup = () => {};
     let cancelled = false;
     async function init() {
       const L = (await import("leaflet")).default;
-      if (heat) await import("leaflet.heat");
       if (cancelled || !element.current) return;
       const map = L.map(element.current, {
         scrollWheelZoom: false,
-        minZoom: 3,
+        minZoom: 6,
         maxZoom: 18,
         zoomAnimation: false,
         fadeAnimation: false,
         markerZoomAnimation: false,
-      }).setView([1.55, -77.65], 7);
+      });
+      cleanup = () => {
+        map.stop();
+        map.remove();
+      };
       const basemap = createOsmLayer(
         L,
         (status) => {
@@ -53,124 +67,139 @@ export default function TerritoryMap({
           if (!cancelled) setTileError(null);
         },
       );
+      basemap.layer.addTo(map);
+      const byName = new Map(summaries.map((s) => [s.name, s]));
+      const geometry = L.geoJSON(cartography as FeatureCollection, {
+        style: (feature) => {
+          const summary = byName.get(feature!.properties.name)!;
+          return {
+            color: "#355246",
+            weight: 1.1,
+            opacity: 1,
+            fillColor: heat
+              ? recurrenceColor(summary.records.length)
+              : summary.records.length
+                ? "#b5ddb9"
+                : "#FFFFFF",
+            fillOpacity: heat ? 0.88 : 0.78,
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const summary = byName.get(feature.properties.name)!;
+          const tooltip = document.createElement("div");
+          const heading = document.createElement("strong");
+          heading.textContent =
+            summary.name + " · " + summary.records.length + " acciones";
+          tooltip.appendChild(heading);
+          summary.components.forEach((component) => {
+            const line = document.createElement("div");
+            line.textContent = component.name + ": " + component.count;
+            tooltip.appendChild(line);
+          });
+          layer.bindTooltip(tooltip, { sticky: true });
+          layer.on("click", () => select.current(summary.name));
+          layer.on("add", () => {
+            const path = (layer as import("leaflet").Path).getElement();
+            if (!path) return;
+            path.setAttribute("data-municipality", summary.name);
+            path.setAttribute(
+              "data-action-count",
+              String(summary.records.length),
+            );
+            path.setAttribute(
+              "aria-label",
+              summary.name + ": " + summary.records.length + " acciones",
+            );
+            // The native municipality selector provides keyboard access to all
+            // polygons, including very small or empty municipalities.
+          });
+        },
+      }).addTo(map);
+      // Initialize the view before adding markers so their elements exist when
+      // assigning accessible names and selection/keyboard behavior.
+      const bounds = geometry.getBounds();
+      map.fitBounds(bounds, { padding: [18, 18], animate: false });
+      const markers: { marker: import("leaflet").Marker; name: string }[] = [];
+      if (!heat)
+        summaries
+          .filter((s) => s.records.length)
+          .forEach((summary) => {
+            const ring = document.createElement("div");
+            ring.className = "municipal-ring";
+            ring.style.background = componentRing(summary);
+            const total = document.createElement("strong");
+            total.textContent = String(summary.records.length);
+            ring.appendChild(total);
+            const marker = L.marker([summary.anchor[1], summary.anchor[0]], {
+              icon: L.divIcon({
+                className: "territory-marker municipal-marker",
+                html: ring,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+              }),
+              title:
+                summary.name +
+                ": " +
+                summary.records.length +
+                " acciones · referencia municipal",
+              keyboard: true,
+            })
+              .on("click", () => select.current(summary.name))
+              .addTo(map);
+            const icon = marker.getElement();
+            icon?.setAttribute(
+              "aria-label",
+              summary.name +
+                ": " +
+                summary.records.length +
+                " acciones. Referencia municipal, no sitio exacto.",
+            );
+            icon?.setAttribute("data-municipality", summary.name);
+            icon?.setAttribute("data-anchor", summary.anchor.join(","));
+            icon?.addEventListener("keydown", (event) => {
+              if (event.key !== " ") return;
+              event.preventDefault();
+              select.current(summary.name);
+            });
+            markers.push({ marker, name: summary.name });
+          });
+      updateSelection.current = () => {
+        geometry.eachLayer((layer) => {
+          const shape = layer as import("leaflet").Polygon;
+          const isSelected =
+            shape.feature?.properties.name === selected.current;
+          shape.setStyle({
+            weight: isSelected ? 3 : 1.1,
+            color: isSelected ? "#000000" : "#355246",
+          });
+          if (isSelected) shape.bringToFront();
+        });
+        markers.forEach(({ marker, name }) =>
+          marker
+            .getElement()
+            ?.classList.toggle(
+              "municipal-marker-selected",
+              name === selected.current,
+            ),
+        );
+      };
+      updateSelection.current();
+      map.setMaxBounds(bounds.pad(0.6));
+      map.attributionControl.addAttribution(
+        "Límites: DANE MGN 2018 / geoColombia",
+      );
+      const observer = new ResizeObserver(() => {
+        map.invalidateSize({ pan: false });
+        map.fitBounds(bounds, { padding: [18, 18], animate: false });
+      });
+      observer.observe(element.current);
       cleanup = () => {
+        observer.disconnect();
+        updateSelection.current = () => {};
         basemap.dispose();
         map.stop();
         map.remove();
       };
-      basemap.layer.addTo(map);
-      const located = activities
-        .filter((a) => recordTypeOf(a) !== "Noticia")
-        .filter(hasLocation)
-        .sort((a, b) => a.id - b.id);
-      const maximum = Math.max(0, ...located.map((a) => a.people));
-      if (heat) {
-        // Heat always uses the original coordinates, not the display offsets
-        // that make coincident markers independently selectable.
-        L.heatLayer(
-          located.map(
-            (activity) =>
-              [
-                activity.latitude,
-                activity.longitude,
-                Math.max(0.2, maximum > 0 ? activity.people / maximum : 0.2),
-              ] as [number, number, number],
-          ),
-          {
-            radius: 28,
-            blur: 20,
-            minOpacity: 0.4,
-            maxZoom: 12,
-            gradient: {
-              0.2: MAP_COLORS[0],
-              0.5: MAP_COLORS[1],
-              0.8: MAP_COLORS[2],
-              1: MAP_COLORS[3],
-            },
-          },
-        ).addTo(map);
-      }
-      const links = L.layerGroup().addTo(map);
-      const markers = (heat ? [] : located).map((activity) => {
-        const dot = document.createElement("span");
-        dot.style.backgroundColor = pointColor(activity.people, maximum);
-        dot.setAttribute("aria-hidden", "true");
-        const marker = L.marker([activity.latitude, activity.longitude], {
-          icon: L.divIcon({
-            className: "territory-marker",
-            html: dot,
-            iconSize: [22, 22],
-            iconAnchor: [11, 11],
-          }),
-          title: recordTypeOf(activity) + ": " + activity.title,
-          keyboard: true,
-        })
-          .on("click", () => open.current(activity))
-          .addTo(map);
-        marker
-          .getElement()
-          ?.setAttribute(
-            "aria-label",
-            recordTypeOf(activity) + " #" + activity.id + ": " + activity.title,
-          );
-        marker
-          .getElement()
-          ?.setAttribute("data-activity-id", String(activity.id));
-        marker.getElement()?.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          event.stopPropagation();
-          open.current(activity);
-        });
-        return marker;
-      });
-      if (located.length)
-        map.fitBounds(
-          L.latLngBounds(located.map((a) => [a.latitude, a.longitude])),
-          { padding: [60, 60], maxZoom: 11, animate: false },
-        );
-      const arrange = () => {
-        const size = map.getSize();
-        const actual = markers.map((marker) =>
-          map.latLngToContainerPoint(marker.getLatLng()),
-        );
-        const symbols = separatePoints(actual, size.x, size.y);
-        links.clearLayers();
-        markers.forEach((marker, index) => {
-          const dx = symbols[index].x - actual[index].x,
-            dy = symbols[index].y - actual[index].y;
-          const icon = marker.getElement();
-          if (icon) {
-            icon.style.marginLeft = dx - 11 + "px";
-            icon.style.marginTop = dy - 11 + "px";
-          }
-          if (Math.hypot(dx, dy) > 1)
-            L.polyline(
-              [
-                marker.getLatLng(),
-                map.containerPointToLatLng([
-                  symbols[index].x,
-                  symbols[index].y,
-                ]),
-              ],
-              {
-                color: "#0071AC",
-                opacity: 0.45,
-                weight: 1,
-                dashArray: "3 3",
-                interactive: false,
-              },
-            ).addTo(links);
-        });
-      };
-      map.on("zoomend resize", arrange);
-      arrange();
-      setTimeout(() => {
-        if (!cancelled) {
-          map.invalidateSize();
-          arrange();
-        }
-      }, 100);
     }
     void init().catch(() => {
       if (!cancelled) {
@@ -182,32 +211,31 @@ export default function TerritoryMap({
       cancelled = true;
       cleanup();
     };
-  }, [activities, attempt, heat]);
+  }, [summaries, heat, attempt]);
   return (
     <div
-      className={
-        "map-container " +
-        (heat ? "heat-view " : "point-map ") +
-        (large ? "large" : "")
-      }
+      className={"municipal-map-frame " + (heat ? "heat-mode" : "actions-mode")}
     >
-      <div
-        ref={element}
-        className="leaflet-map"
-        aria-label={
-          heat
-            ? "Mapa de calor de actividades y operativos en Nariño"
-            : "Mapa de actividades y operativos individuales en Nariño"
-        }
-      />
+      <div className={"map-container " + (heat ? "heat-view" : "action-map")}>
+        <div
+          ref={element}
+          className="leaflet-map"
+          aria-label={
+            heat
+              ? "Mapa de calor: cantidad de acciones por municipio de Nariño"
+              : "Mapa de acciones y cobertura de los 64 municipios de Nariño"
+          }
+        />
+        <div className="map-location">
+          NARIÑO <span>COLOMBIA</span>
+        </div>
+      </div>
       {tileError && (
         <div className="map-feedback" role="status">
           <strong>Mapa base no disponible</strong>
           <p>
-            {tileError}{" "}
-            {heat
-              ? "La capa de calor sigue disponible."
-              : "Los puntos individuales y sus detalles siguen disponibles."}
+            {tileError} Los límites municipales, las acciones y sus detalles
+            siguen disponibles.
           </p>
           <button
             className="button secondary"
@@ -220,18 +248,6 @@ export default function TerritoryMap({
           </button>
         </div>
       )}
-      {!activities.length && !tileError && (
-        <div className="map-empty">
-          <span className="status-dot" />
-          <strong>El territorio espera sus primeros registros</strong>
-          <span>
-            Las actividades aparecerán aquí al cargar sus coordenadas.
-          </span>
-        </div>
-      )}
-      <div className="map-location">
-        NARIÑO <span>COLOMBIA</span>
-      </div>
     </div>
   );
 }

@@ -63,17 +63,19 @@ anteriores y nuevos.
 
 ## Funcionalidades
 
-- Vista general con puntos individuales de color, uno por registro, y leyenda
-  de intensidad relativa según las personas reportadas (azul, verde, amarillo y
-  rojo). El mapa base conserva su apariencia normal. Contadores separados
-  de actividades (incluidas ferias) y operativos. Filtros por componente, tipo de
+- Vista general con cobertura y recurrencia municipal. Contadores separados de
+  actividades (incluidas ferias) y operativos. Filtros por componente, tipo de
   registro, municipio y fechas; exportación CSV con el tipo de registro.
-  El selector **Puntos individuales / Mapa de calor** permite cambiar entre
-  registros seleccionables y una capa continua de intensidad, conservando los
-  mismos filtros y registros. La vista inicial es Puntos individuales. El calor
-  se calcula con las coordenadas originales, sin los desplazamientos visuales
-  que separan símbolos coincidentes. Los registros sin cifras de personas
-  conservan una intensidad mínima de presencia.
+  El selector **Mapa de acciones / Mapa de calor** comparte filtros y referencias
+  municipales. Acciones muestra cobertura, total municipal y componentes; el
+  listado permite abrir cada actividad, operativo o feria individualmente.
+  Calor representa recurrencia: cada acción cuenta una vez, sin ponderar por
+  beneficiarios. La escala fija es 0, 1, 2–4, 5–9 y 10 o más acciones.
+  Ambos mapas usan el municipio declarado; las coordenadas se conservan como
+  referencias opcionales, sin desplazamientos visuales ni sitios exactos.
+  Los 64 límites municipales y su procedencia están documentados en
+  [Cartografía](docs/cartografia/README.md).
+
 - FONSET sustituye la navegación independiente de Mapa territorial. Muestra
   **En construcción** para el futuro presupuesto y los proyectos; todavía no
   registra cifras presupuestales ni proyectos.
@@ -82,13 +84,9 @@ anteriores y nuevos.
   ferias, noticias y documentos. Los enlaces de cada componente se conservan al
   recargar. El enlace antiguo `#territorio` abre Vista general y `#observatorio`
   abre los documentos del componente Observatorio.
-- Catálogo de los 64 municipios. Jornadas con coordenadas decimales y metas PISCC.
-- Mapa Leaflet con un marcador por actividad, feria u operativo, sin agrupar ni
-  fusionar registros por coordenadas o cercanía. Al pulsar un punto se abre el
-  detalle completo de ese registro. Los símbolos coincidentes se separan en
-  pantalla, con líneas hacia la ubicación original; las coordenadas almacenadas
-  no cambian. El contador indica cuántos puntos corresponden a los registros de
-  la consulta. El diseño se recalcula al cambiar el zoom o el tamaño de pantalla.
+- Catálogo de los 64 municipios. Jornadas con referencias decimales opcionales
+  y metas PISCC. Los registros individuales siempre se pueden abrir desde el
+  listado del mapa, aunque compartan municipio o coordenadas.
   Las teselas provienen de
   `tile.openstreetmap.org` y requieren acceso desde el navegador. Si no están
   disponibles, se conserva la consulta de coordenadas en los registros. Se envía
@@ -96,7 +94,7 @@ anteriores y nuevos.
   `Referrer-Policy: strict-origin-when-cross-origin`, manteniendo la caché HTTP.
   El estado HTTP de cada imagen se comprueba antes de mostrarla: un 403 u otro
   fallo detiene la capa base, muestra un aviso y permite reintentar manualmente.
-  Los puntos y sus detalles siguen disponibles; no se usan servidores alternos
+  Los límites, los totales municipales y sus registros siguen disponibles; no se usan servidores alternos
   para eludir bloqueos del proveedor.
 - Registro y edición manual, importación JSON de hasta 200 jornadas por operación
   y extracción asistida de boletines de WhatsApp. La importación valida todas las
@@ -134,15 +132,17 @@ anteriores y nuevos.
 
 Ingresa como funcionario y usa **Nueva jornada**. El formulario incluye la carga
 asistida y el archivo JSON. `public/plantilla-jornadas.json` es una estructura con
-valores pendientes; no pasa la validación hasta completar fecha, municipio y
-coordenadas reales. No incluye datos de demostración importables por accidente.
+valores pendientes; no pasa la validación hasta completar los campos obligatorios,
+como fecha, municipio, objetivo y resumen. No incluye datos de demostración
+importables por accidente.
 
 Selecciona **Tipo de registro** (Actividad, Operativo, Feria o Noticia) y el
 componente. También puedes entrar desde **Componentes** y usar **Registrar
 operativo**, **Registrar feria** o **Publicar noticia** para completar esos campos
-automáticamente. Las noticias permiten dejar ambas coordenadas vacías; se
-consultan en su componente y en el registro, y no suman intervenciones ni
-beneficiarios al tablero. Actividades, ferias y operativos requieren coordenadas.
+automáticamente. Las noticias se consultan en su componente y en el registro, y
+no suman intervenciones ni beneficiarios al tablero. Todos los tipos permiten
+dejar ambas coordenadas vacías: el mapa utiliza el municipio declarado. Si se
+conserva una referencia decimal, se deben completar las dos coordenadas.
 Los registros anteriores sin tipo se muestran como Actividad. Un editor puede
 reclasificarlos sin duplicarlos, conservando sus datos y archivos asociados.
 

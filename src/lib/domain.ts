@@ -276,10 +276,9 @@ export function validateActivity(value: unknown): ActivityInput {
   const program = textField(a.program, "Programa") as Program;
   if (!COMPONENTS.includes(program))
     throw new AppError("Componente no válido.");
-  const newsWithoutLocation =
-    recordType === "Noticia" && a.latitude == null && a.longitude == null;
+  const withoutCoordinates = a.latitude == null && a.longitude == null;
   if (
-    !newsWithoutLocation &&
+    !withoutCoordinates &&
     (typeof a.latitude !== "number" ||
       typeof a.longitude !== "number" ||
       !Number.isFinite(a.latitude) ||
@@ -290,7 +289,7 @@ export function validateActivity(value: unknown): ActivityInput {
       a.longitude > -75.5)
   )
     throw new AppError(
-      "Las coordenadas deben estar en el entorno geográfico de Nariño (latitud 0 a 3,5; longitud −79,5 a −75,5). Verifica su ubicación en el mapa.",
+      "Completa ambas coordenadas de referencia o deja ambas vacías. Si las registras, deben estar en el entorno de Nariño (latitud 0 a 3,5; longitud −79,5 a −75,5).",
     );
   // Legacy values remain readable; new journeys no longer require budget fields.
   const budgetApproved =
@@ -307,8 +306,8 @@ export function validateActivity(value: unknown): ActivityInput {
     date,
     municipality,
     program,
-    latitude: newsWithoutLocation ? null : (a.latitude as number),
-    longitude: newsWithoutLocation ? null : (a.longitude as number),
+    latitude: withoutCoordinates ? null : (a.latitude as number),
+    longitude: withoutCoordinates ? null : (a.longitude as number),
     people: num("people", 1e8),
     families: num("families", 1e8),
     weaponsSeized: num("weaponsSeized", 1e7),
