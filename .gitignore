@@ -13,3 +13,4 @@ npm-debug.log*
 data/
 playwright-report/
 test-results/
+public/pdfjs/

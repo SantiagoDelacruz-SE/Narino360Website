@@ -63,7 +63,18 @@ anteriores y nuevos.
 
 ## Funcionalidades
 
-- Tablero con filtros por programa, municipio y fechas; exportación CSV de jornadas.
+- Vista general con mapa de calor activo por defecto, leyenda de intensidad y
+  un mapa base atenuado para resaltar las intervenciones. Contadores separados
+  de actividades (incluidas ferias) y operativos. Filtros por componente, tipo de
+  registro, municipio y fechas; exportación CSV con el tipo de registro.
+- FONSET sustituye la navegación independiente de Mapa territorial. Muestra
+  **En construcción** para el futuro presupuesto y los proyectos; todavía no
+  registra cifras presupuestales ni proyectos.
+- Componentes: Observatorio, PISCC, Banco de Alimentos, Cultivos para la Paz y
+  Acción Unificada. Cada uno permite consultar resumen, actividades, operativos,
+  ferias, noticias y documentos. Los enlaces de cada componente se conservan al
+  recargar. El enlace antiguo `#territorio` abre Vista general y `#observatorio`
+  abre los documentos del componente Observatorio.
 - Catálogo de los 64 municipios. Jornadas con coordenadas decimales y metas PISCC.
 - Mapa Leaflet (equivalente web de la cartografía Folium), agrupación de marcadores,
   popups y calor ponderado por personas reportadas. Las teselas provienen de
@@ -96,8 +107,11 @@ anteriores y nuevos.
 - Observatorio de publicaciones: boletines diarios, semanales, mensuales, de
   investigación, temáticos y otros productos institucionales. Carga de PDF con
   título, descripción, categoría y fecha de publicación; búsqueda, filtros por
-  categoría y fechas, orden cronológico y descarga autenticada. Los funcionarios
-  cargan y eliminan; los invitados consultan y descargan.
+  categoría y fechas, orden cronológico, previsualización y descarga autenticada.
+  El visor PDF permite cambiar de página y ajustar el zoom, se ejecuta en el
+  navegador y utiliza recursos de la propia aplicación. Las descargas mantienen
+  la autenticación y sus encabezados de seguridad. Administrador y Editor cargan
+  y eliminan; Consulta e Invitado consultan, previsualizan y descargan.
 - Paleta institucional: amarillo `#FFD500` y verde `#10A13B`, con azul claro
   `#80BEFF`, azul `#0071AC`, café `#896633`, rojo `#DA1C24`, negro y blanco
   como colores secundarios.
@@ -111,14 +125,33 @@ asistida y el archivo JSON. `public/plantilla-jornadas.json` es una estructura c
 valores pendientes; no pasa la validación hasta completar fecha, municipio y
 coordenadas reales. No incluye datos de demostración importables por accidente.
 
+Selecciona **Tipo de registro** (Actividad, Operativo, Feria o Noticia) y el
+componente. También puedes entrar desde **Componentes** y usar **Registrar
+operativo**, **Registrar feria** o **Publicar noticia** para completar esos campos
+automáticamente. Las noticias permiten dejar ambas coordenadas vacías; se
+consultan en su componente y en el registro, y no suman intervenciones ni
+beneficiarios al tablero. Actividades, ferias y operativos requieren coordenadas.
+Los registros anteriores sin tipo se muestran como Actividad. Un editor puede
+reclasificarlos sin duplicarlos, conservando sus datos y archivos asociados.
+
 En **Mural de evidencias** carga fotos o PDF y, opcionalmente, asócialos a una
-jornada, municipio y programa. Los filtros de fecha de archivos usan la fecha de
+jornada, municipio y componente. Los filtros de fecha de archivos usan la fecha de
 carga; los de jornadas usan la fecha de ejecución.
 
-En **Observatorio → Cargar publicación** sube el PDF, elige uno de los seis tipos
+En **Componentes → Observatorio → Documentos → Cargar publicación** sube el PDF, elige uno de los seis tipos
 e indica la fecha de publicación. Los filtros usan esa fecha, independientemente
-del día en que se cargó el archivo. Los soportes del mural y las diapositivas
-conservan sus módulos y no se mezclan con el catálogo de publicaciones.
+del día en que se cargó el archivo. El selector **Componente del archivo** permite
+publicarlo en cualquiera de los cinco componentes. Los boletines anteriores sin
+componente siguen en Observatorio. Los PDF del mural conservan ese acceso y,
+cuando están asociados a un componente o a una jornada suya, también aparecen en
+sus documentos. **Componentes → Todos los PDF** permite consultar incluso los
+soportes sin componente. Usa **Previsualizar PDF** para abrir el visor; también
+está disponible desde el mural y los soportes del detalle de una jornada.
+
+El proceso de compilación prepara el worker y las fuentes de PDF.js en
+`public/pdfjs/`; son recursos generados desde la dependencia, no datos cargados.
+El despliegue en Render debe seguir ejecutando `npm ci --include=dev && npm run
+build`. No requiere modificar el disco persistente ni volver a cargar documentos.
 
 En **Presentación estratégica → Cargar diapositivas** sube imágenes, preferiblemente
 16:9. Si tu presentación está en PowerPoint o PDF, exporta primero sus páginas a

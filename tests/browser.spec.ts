@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import sharp from "sharp";
+import { pdfFixture } from "./pdf-fixture";
 test("Funcionario registra jornada, carga evidencias y usa el carrusel", async ({
   page,
 }, testInfo) => {
@@ -29,14 +30,14 @@ test("Funcionario registra jornada, carga evidencias y usa el carrusel", async (
     .click();
   const dialog = page.getByRole("dialog");
   await dialog
-    .getByLabel("Título de la jornada")
+    .getByLabel("Título del registro")
     .fill("Encuentro comunitario de prueba");
   await dialog.getByLabel("Fecha", { exact: true }).fill("2026-10-15");
   await dialog
     .getByRole("combobox", { name: "Municipio", exact: true })
     .selectOption("Pasto");
   await dialog
-    .getByRole("combobox", { name: "Programa", exact: true })
+    .getByRole("combobox", { name: "Componente", exact: true })
     .selectOption("PISCC");
   await dialog.getByLabel("Latitud").fill("1.2136");
   await dialog.getByLabel("Longitud").fill("-77.2811");
@@ -213,7 +214,10 @@ test("Observatorio permite publicar, filtrar, descargar y eliminar boletines", a
     .getByLabel("Contraseña", { exact: true })
     .fill("Clave-Solo-Pruebas-2026");
   await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
-  await page.getByRole("button", { name: "Observatorio", exact: true }).click();
+  await page.getByRole("button", { name: "Componentes", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Abrir componente Observatorio", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", {
       name: "Boletines y productos del observatorio",
@@ -332,7 +336,10 @@ test("Observatorio permite publicar, filtrar, descargar y eliminar boletines", a
     .getByRole("button", { name: "Registrar ingreso y continuar" })
     .click();
   await page.getByRole("button", { name: "Abrir navegación" }).click();
-  await page.getByRole("button", { name: "Observatorio", exact: true }).click();
+  await page.getByRole("button", { name: "Componentes", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Abrir componente Observatorio", exact: true })
+    .click();
   await expect(page.locator(".publication-card")).toHaveCount(1);
   await expect(
     page.getByRole("button", { name: "Cargar publicación", exact: true }),
@@ -432,6 +439,7 @@ test("El mapa identifica su origen, carga teselas válidas y maneja 403 sin dibu
   ).toBeVisible();
   await expect(page.locator(".map-feedback")).toContainText("HTTP 403");
   await expect(page.locator(".leaflet-tile-pane img")).toHaveCount(0);
+  await page.getByRole("button", { name: "Marcadores", exact: true }).click();
   await expect
     .poll(() => page.locator(".territory-marker").count())
     .toBeGreaterThan(0);
@@ -946,11 +954,11 @@ test("El administrador crea una cuenta Consulta y el funcionario navega sin cont
     page.getByRole("button", { name: "Nueva jornada", exact: true }),
   ).toHaveCount(0);
   for (const tab of [
-    "Mapa territorial",
+    "FONSET",
     "Jornadas y actividades",
     "Mural de evidencias",
     "Presentación estratégica",
-    "Observatorio",
+    "Componentes",
   ]) {
     await page.getByRole("button", { name: tab, exact: true }).click();
     await expect(
@@ -1181,4 +1189,310 @@ test("El administrador edita rol y estado desde la web, revoca sesiones y conser
   } finally {
     await visitor.close();
   }
+});
+
+test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con páginas y zoom sin ejecutar scripts", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(120000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("dialog", async (dialog) => {
+    errors.push("PDF ejecutó un diálogo: " + dialog.message());
+    await dialog.dismiss();
+  });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(page.locator(".map-container")).toHaveClass(/heat-view/);
+  await expect(page.locator(".leaflet-heatmap-layer")).toBeVisible();
+  await expect(page.locator(".heat-scale")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Mapa territorial", exact: true }),
+  ).toHaveCount(0);
+  const kpi = (label: string) =>
+    page.locator(".kpi-card").filter({ hasText: label }).locator(".kpi-value");
+  const before = Number(
+    (await kpi("Actividades ejecutadas").innerText()).replace(/\./g, ""),
+  );
+  await page.getByRole("button", { name: "FONSET", exact: true }).click();
+  await expect(
+    page.getByText("En construcción", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Presupuesto y proyectos FONSET",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".leaflet-map")).toHaveCount(0);
+  await expect(page.locator(".heading-actions")).toBeHidden();
+  await page.getByRole("button", { name: "Componentes", exact: true }).click();
+  await expect(page.locator(".component-card")).toHaveCount(5);
+  await page.screenshot({
+    path: testInfo.outputPath("componentes-desktop.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", { name: "Abrir componente PISCC", exact: true })
+    .click();
+  for (const item of [
+    {
+      tab: "Operativos",
+      type: "Operativo",
+      title: "Operativo territorial PISCC",
+      municipality: "Pasto",
+      lat: "1.2136",
+      lng: "-77.2811",
+    },
+    {
+      tab: "Ferias",
+      type: "Feria",
+      title: "Feria de servicios PISCC",
+      municipality: "Ipiales",
+      lat: "0.83",
+      lng: "-77.64",
+    },
+    {
+      tab: "Noticias",
+      type: "Noticia",
+      title: "Noticia relevante PISCC",
+      municipality: "Tumaco",
+      lat: "",
+      lng: "",
+    },
+  ]) {
+    await page.getByRole("tab", { name: item.tab, exact: true }).click();
+    await page
+      .getByRole("button", {
+        name:
+          item.type === "Noticia"
+            ? "Publicar noticia"
+            : "Registrar " + item.type.toLowerCase(),
+        exact: true,
+      })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByLabel("Tipo de registro", { exact: true }),
+    ).toHaveValue(item.type);
+    await expect(dialog.getByLabel("Componente", { exact: true })).toHaveValue(
+      "PISCC",
+    );
+    await dialog
+      .getByLabel("Título del registro", { exact: true })
+      .fill(item.title);
+    await dialog.getByLabel("Fecha", { exact: true }).fill("2026-11-09");
+    await dialog
+      .getByLabel("Municipio", { exact: true })
+      .selectOption(item.municipality);
+    if (item.type !== "Noticia") {
+      await dialog.getByLabel("Latitud", { exact: true }).fill(item.lat);
+      await dialog.getByLabel("Longitud", { exact: true }).fill(item.lng);
+    }
+    await dialog
+      .getByLabel("Objetivo", { exact: true })
+      .fill("Comunicar y registrar la gestión institucional");
+    await dialog
+      .getByLabel("Resumen operativo y resultados", { exact: true })
+      .fill("Contenido verificable para " + item.title);
+    await dialog
+      .getByRole("button", {
+        name:
+          item.type === "Noticia"
+            ? "Publicar noticia"
+            : "Registrar " + item.type.toLowerCase(),
+        exact: true,
+      })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: item.title, exact: true }),
+    ).toBeVisible();
+  }
+  await page
+    .getByRole("button", { name: "Vista general", exact: true })
+    .click();
+  await expect(kpi("Operativos ejecutados")).toHaveText("1");
+  await expect(kpi("Actividades ejecutadas")).toHaveText(String(before + 1));
+  await page.locator(".map-panel").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: testInfo.outputPath("mapa-calor-contraste.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: "Componentes", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Abrir componente Banco de Alimentos",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("tab", { name: "Operativos", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Operativo territorial PISCC",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Todos los componentes", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Abrir componente PISCC", exact: true })
+    .click();
+  await page.getByRole("tab", { name: "Documentos", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Cargar publicación", exact: true })
+    .click();
+  let dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByLabel("Componente del archivo", { exact: true }),
+  ).toHaveValue("PISCC");
+  await dialog
+    .getByLabel("Título", { exact: true })
+    .fill("Documento PISCC de dos páginas");
+  await dialog
+    .getByLabel("Tipo de publicación", { exact: true })
+    .selectOption("Otros productos");
+  await dialog
+    .getByLabel("Fecha de publicación", { exact: true })
+    .fill("2026-11-09");
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "producto.pdf",
+    mimeType: "application/pdf",
+    buffer: pdfFixture(),
+  });
+  await dialog
+    .getByRole("button", { name: "Cargar archivos", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Previsualizar PDF Documento PISCC de dos páginas",
+      exact: true,
+    })
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("status")).toHaveText("Página 1 de 2");
+  const canvas = dialog.locator("canvas");
+  await expect
+    .poll(() => canvas.evaluate((c: HTMLCanvasElement) => c.width))
+    .toBeGreaterThan(300);
+  await expect
+    .poll(() =>
+      canvas.evaluate((c: HTMLCanvasElement) => {
+        const pixels = c
+          .getContext("2d")!
+          .getImageData(0, 0, c.width, c.height).data;
+        for (let i = 0; i < pixels.length; i += 4)
+          if (pixels[i] < 180 && pixels[i + 3] > 200) return true;
+        return false;
+      }),
+    )
+    .toBe(true);
+  await dialog
+    .getByRole("button", { name: "Página siguiente", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toHaveText("Página 2 de 2");
+  await expect(
+    dialog.getByRole("button", { name: "Página siguiente", exact: true }),
+  ).toBeDisabled();
+  await dialog.getByLabel("Zoom del PDF", { exact: true }).selectOption("1.5");
+  await page.screenshot({
+    path: testInfo.outputPath("pdf-previsualizacion.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  const download = page.waitForEvent("download");
+  await dialog
+    .getByRole("link", { name: "Descargar PDF", exact: true })
+    .click();
+  expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  const assets = (await (await page.request.get("/api/media")).json()).assets;
+  const pdf = assets.find(
+    (a: { title: string }) => a.title === "Documento PISCC de dos páginas",
+  );
+  const origin = new URL(page.url()).origin;
+  const anonymous = await browser.newContext();
+  try {
+    expect(
+      (await anonymous.request.get(origin + "/api/media/" + pdf.id)).status(),
+    ).toBe(401);
+  } finally {
+    await anonymous.close();
+  }
+  // A PDF with no component is an existing Observatorio product.
+  const legacy = await page.request.post("/api/media", {
+    headers: { origin },
+    multipart: {
+      kind: "publicacion",
+      title: "Boletín previo a componentes",
+      publicationType: "Boletín diario",
+      publicationDate: "2026-11-09",
+      file: {
+        name: "legado.pdf",
+        mimeType: "application/pdf",
+        buffer: pdfFixture(),
+      },
+    },
+  });
+  expect(legacy.status()).toBe(201);
+  const visitor = await page.request.post("/api/auth", {
+    headers: { origin },
+    data: {
+      action: "guest",
+      firstName: "Lectura",
+      lastName: "PDF",
+      entity: "Prueba",
+      position: "Consulta",
+    },
+  });
+  expect(visitor.status()).toBe(200);
+  await page.goto("/#observatorio");
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: "Boletín previo a componentes",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Cargar publicación", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", {
+      name: "Previsualizar PDF Boletín previo a componentes",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("dialog").getByRole("status")).toHaveText(
+    "Página 1 de 2",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cerrar", exact: true })
+    .click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: "Abrir navegación", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Componentes", exact: true }).click();
+  await page.screenshot({
+    path: testInfo.outputPath("componentes-mobile.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(errors).toEqual([]);
 });

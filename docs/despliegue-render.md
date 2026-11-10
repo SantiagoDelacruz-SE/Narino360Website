@@ -75,6 +75,12 @@ ni quitar el rol al último administrador activo.
   cambia su contraseña, sin controles para editar, cargar o eliminar información.
 - El administrador puede iniciar sesión y registrar una jornada.
 - Una fotografía cargada aparece en el mural y una diapositiva en el carrusel.
+- Vista general abre el mapa de calor con sus colores y leyenda. Los contadores
+  distinguen actividades de operativos y FONSET muestra **En construcción**.
+- Componentes muestra Observatorio, PISCC, Banco de Alimentos, Cultivos para la
+  Paz y Acción Unificada, con sus registros y documentos correspondientes.
+- Un PDF válido abre con **Previsualizar PDF** y permite cambiar página, ajustar
+  el zoom y descargarlo, también con una cuenta Consulta.
 - Después de reiniciar el servicio, la cuenta, la jornada y el archivo siguen
   disponibles. Esta prueba confirma que el disco está montado correctamente.
 
@@ -95,6 +101,11 @@ La actualización que añade el rol Consulta adapta automáticamente la tabla de
 usuarios al abrir la base de datos. Conserva las cuentas, hashes de contraseña,
 sesiones y referencias existentes. No necesitas recrear usuarios ni volver
 a cargar imágenes, documentos o jornadas.
+
+La organización por componentes conserva los datos: los registros anteriores se
+muestran como actividades y los boletines sin componente siguen en Observatorio.
+PDF.js y sus recursos se preparan durante `npm run build`; la previsualización
+ocurre en el navegador y los archivos siguen protegidos por la sesión.
 
 ## Diagnosticar una carga que falla
 

@@ -4,7 +4,22 @@ export const PROGRAMS = [
   "Banco de Alimentos",
   "Acción Unificada",
 ] as const;
-export type Program = (typeof PROGRAMS)[number];
+export const COMPONENTS = [
+  "Observatorio",
+  "PISCC",
+  "Banco de Alimentos",
+  "Cultivos para la Paz",
+  "Acción Unificada",
+] as const;
+export type Component = (typeof COMPONENTS)[number];
+export type Program = Component;
+export const RECORD_TYPES = [
+  "Actividad",
+  "Operativo",
+  "Feria",
+  "Noticia",
+] as const;
+export type RecordType = (typeof RECORD_TYPES)[number];
 export const MUNICIPALITIES = [
   "Albán",
   "Aldana",
@@ -87,12 +102,13 @@ export type Identity = {
   username?: string;
 };
 export type ActivityInput = {
+  recordType?: RecordType;
   title: string;
   date: string;
   municipality: string;
   program: Program;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   people: number;
   families: number;
   weaponsSeized: number;
@@ -132,6 +148,32 @@ export type Asset = {
   publicationType?: PublicationType;
   publicationDate?: string;
 };
+export const recordTypeOf = (
+  activity: Pick<ActivityInput, "recordType">,
+): RecordType => activity.recordType ?? "Actividad";
+export function hasLocation(
+  activity: Activity,
+): activity is Activity & { latitude: number; longitude: number } {
+  return (
+    typeof activity.latitude === "number" &&
+    Number.isFinite(activity.latitude) &&
+    typeof activity.longitude === "number" &&
+    Number.isFinite(activity.longitude)
+  );
+}
+export function assetComponent(
+  asset: Asset,
+  activities: readonly Pick<Activity, "id" | "program">[] = [],
+): Component | null {
+  if (COMPONENTS.some((component) => component === asset.program))
+    return asset.program as Component;
+  const linked = activities.find(
+    (activity) => activity.id === asset.activityId,
+  );
+  if (linked) return linked.program;
+  // The existing bulletin library belonged to Observatorio before components.
+  return asset.kind === "publicacion" ? "Observatorio" : null;
+}
 export const REFERENCES = {
   municipalities: 64,
   coverage: 39,
@@ -206,6 +248,9 @@ export function validateActivity(value: unknown): ActivityInput {
   if (!value || typeof value !== "object")
     throw new AppError("La jornada no es válida.");
   const a = value as Record<string, unknown>;
+  const recordType = a.recordType === undefined ? "Actividad" : a.recordType;
+  if (!RECORD_TYPES.some((type) => type === recordType))
+    throw new AppError("Tipo de registro no válido.");
   const num = (k: string, max: number, integer = true) => {
     const n = a[k];
     if (
@@ -229,16 +274,20 @@ export function validateActivity(value: unknown): ActivityInput {
   if (!MUNICIPALITIES.some((m) => m === municipality))
     throw new AppError("Selecciona un municipio de Nariño.");
   const program = textField(a.program, "Programa") as Program;
-  if (!PROGRAMS.includes(program)) throw new AppError("Programa no válido.");
+  if (!COMPONENTS.includes(program))
+    throw new AppError("Componente no válido.");
+  const newsWithoutLocation =
+    recordType === "Noticia" && a.latitude == null && a.longitude == null;
   if (
-    typeof a.latitude !== "number" ||
-    typeof a.longitude !== "number" ||
-    !Number.isFinite(a.latitude) ||
-    !Number.isFinite(a.longitude) ||
-    a.latitude < 0 ||
-    a.latitude > 3.5 ||
-    a.longitude < -79.5 ||
-    a.longitude > -75.5
+    !newsWithoutLocation &&
+    (typeof a.latitude !== "number" ||
+      typeof a.longitude !== "number" ||
+      !Number.isFinite(a.latitude) ||
+      !Number.isFinite(a.longitude) ||
+      a.latitude < 0 ||
+      a.latitude > 3.5 ||
+      a.longitude < -79.5 ||
+      a.longitude > -75.5)
   )
     throw new AppError(
       "Las coordenadas deben estar en el entorno geográfico de Nariño (latitud 0 a 3,5; longitud −79,5 a −75,5). Verifica su ubicación en el mapa.",
@@ -253,12 +302,13 @@ export function validateActivity(value: unknown): ActivityInput {
       "La ejecución no puede superar el presupuesto aprobado.",
     );
   return {
+    recordType: recordType as RecordType,
     title: textField(a.title, "Título", 200),
     date,
     municipality,
     program,
-    latitude: a.latitude,
-    longitude: a.longitude,
+    latitude: newsWithoutLocation ? null : (a.latitude as number),
+    longitude: newsWithoutLocation ? null : (a.longitude as number),
     people: num("people", 1e8),
     families: num("families", 1e8),
     weaponsSeized: num("weaponsSeized", 1e7),

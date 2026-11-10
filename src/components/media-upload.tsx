@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import {
   MUNICIPALITIES,
-  PROGRAMS,
+  COMPONENTS,
+  type Component,
   PUBLICATION_TYPES,
   type Activity,
   type Asset,
@@ -17,11 +18,13 @@ type UploadBatch = {
 };
 export default function MediaUpload({
   kind,
+  initialProgram,
   activities,
   onSaved,
   onRefresh,
 }: {
   kind: Asset["kind"];
+  initialProgram?: Component;
   activities: Activity[];
   onSaved: () => Promise<void>;
   onRefresh: () => Promise<void>;
@@ -215,6 +218,24 @@ export default function MediaUpload({
             </label>
           </div>
         )}
+        {kind !== "diapositiva" && (
+          <label>
+            Componente
+            <select
+              name="program"
+              aria-label="Componente del archivo"
+              required={kind === "publicacion"}
+              defaultValue={
+                initialProgram ?? (kind === "publicacion" ? "Observatorio" : "")
+              }
+            >
+              <option value="">Sin componente asociado</option>
+              {COMPONENTS.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {kind !== "diapositiva" && kind !== "publicacion" && (
           <>
             <div className="field-grid">
@@ -224,15 +245,6 @@ export default function MediaUpload({
                   <option value="">Sin municipio asociado</option>
                   {MUNICIPALITIES.map((m) => (
                     <option key={m}>{m}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Programa
-                <select name="program">
-                  <option value="">Sin programa asociado</option>
-                  {PROGRAMS.map((p) => (
-                    <option key={p}>{p}</option>
                   ))}
                 </select>
               </label>

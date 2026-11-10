@@ -17,7 +17,7 @@ import {
   AppError,
   textField,
   publicationMetadata,
-  PROGRAMS,
+  COMPONENTS,
   MUNICIPALITIES,
   type Asset,
 } from "@/lib/domain";
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
       program = textField(data.get("program") || "", "Programa", 100, 0);
     if (municipality && !MUNICIPALITIES.some((m) => m === municipality))
       throw new AppError("Municipio no válido.");
-    if (program && !PROGRAMS.some((p) => p === program))
+    if (program && !COMPONENTS.some((p) => p === program))
       throw new AppError("Programa no válido.");
     const activityId = data.get("activityId")
       ? Number(data.get("activityId"))

@@ -956,7 +956,7 @@ h3 {
 }
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 13px;
 }
 .kpi-card {
@@ -1219,7 +1219,7 @@ h3 {
 }
 .program-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 15px;
 }
 .program-card {
@@ -3036,4 +3036,388 @@ td small {
   min-height: 32px;
   font-size: 11px;
   padding: 7px 10px;
+}
+
+/* Components, intervention types and document reading. */
+.program-card p {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.program-card p > span {
+  display: block;
+  color: var(--muted);
+}
+.program-card p > span::before {
+  content: "•";
+  color: var(--green);
+  margin-right: 6px;
+}
+.map-container.heat-view .leaflet-tile-pane {
+  opacity: 0.42;
+  filter: grayscale(0.6);
+}
+.map-container.heat-view .leaflet-map {
+  background: #fff;
+}
+.heat-scale {
+  display: inline-block;
+  width: 94px;
+  height: 9px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #80beff, #10a13b, #ffd500, #da1c24);
+}
+.map-legend > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.record-type {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--green) 12%, white);
+  color: var(--ink);
+}
+.type-operativo {
+  background: color-mix(in srgb, var(--red) 12%, white);
+}
+.type-feria {
+  background: color-mix(in srgb, var(--yellow) 30%, white);
+}
+.type-noticia {
+  background: color-mix(in srgb, var(--light-blue) 30%, white);
+}
+.table-title + .record-type {
+  margin-left: 8px;
+}
+.fonset-placeholder {
+  text-align: center;
+  min-height: 450px;
+  padding: 42px 28px;
+  position: relative;
+  overflow: hidden;
+}
+.fonset-placeholder::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: repeating-linear-gradient(
+    120deg,
+    var(--yellow) 0 24px,
+    var(--green) 24px 48px
+  );
+}
+.construction-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 99px;
+  background: var(--yellow);
+  font-weight: 700;
+}
+.fonset-symbol {
+  width: 94px;
+  height: 94px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--green) 10%, white);
+  color: var(--green);
+  display: grid;
+  place-items: center;
+  margin: 28px auto 24px;
+}
+.fonset-placeholder h2 {
+  font-size: 28px;
+  margin: 12px 0;
+}
+.fonset-placeholder > p {
+  max-width: 540px;
+  margin: 0 auto;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.fonset-future {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+.fonset-future span {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+}
+.components-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.component-card {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--green);
+  border-radius: 12px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.component-card:hover {
+  border-color: var(--green);
+  box-shadow: 0 6px 22px #0000000c;
+}
+.component-card:first-child {
+  grid-column: span 2;
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--green) 9%, white),
+    white
+  );
+  border-top-color: var(--yellow);
+}
+.component-card-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--green) 13%, white);
+  color: var(--ink);
+  margin-bottom: 18px;
+}
+.component-2 .component-card-icon {
+  background: color-mix(in srgb, var(--brown) 15%, white);
+}
+.component-3 .component-card-icon {
+  background: color-mix(in srgb, var(--yellow) 35%, white);
+}
+.component-4 .component-card-icon {
+  background: color-mix(in srgb, var(--light-blue) 25%, white);
+}
+.component-card h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+.component-card > p {
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 12px;
+  flex: 1;
+}
+.component-card-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 16px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.component-card-counts strong {
+  color: var(--ink);
+}
+.component-enter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue);
+}
+.component-detail-heading h2 {
+  font-size: 30px;
+  margin: 9px 0;
+}
+.component-detail-heading p {
+  color: var(--muted);
+  margin-bottom: 0;
+}
+.component-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: 9px;
+}
+.component-tabs button {
+  border: 0;
+  background: transparent;
+  padding: 11px 16px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.component-tabs [aria-selected="true"] {
+  color: var(--black);
+  background: var(--yellow);
+  font-weight: 700;
+}
+.component-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.component-summary article {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.component-summary span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.component-summary strong {
+  font-size: 30px;
+}
+.component-records {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.component-record {
+  padding: 22px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.component-record h3 {
+  font-size: 18px;
+  margin: 20px 0 8px;
+  overflow-wrap: anywhere;
+}
+.component-record-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.component-record-meta > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.component-record-excerpt {
+  color: var(--muted);
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.publication-card footer {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pdf-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.pdf-toolbar {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pdf-toolbar label {
+  flex-direction: row;
+  align-items: center;
+}
+.pdf-toolbar select {
+  width: auto;
+}
+.pdf-toolbar > a {
+  margin-left: auto;
+}
+.pdf-canvas-wrap {
+  background: color-mix(in srgb, var(--black) 9%, white);
+  padding: 12px;
+  overflow: auto;
+  max-height: 65vh;
+  min-height: 220px;
+  width: 100%;
+}
+.pdf-canvas-wrap canvas {
+  display: block;
+  margin: 0 auto;
+  background: white;
+  box-shadow: 0 3px 12px #0002;
+}
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .program-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .component-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .component-grid,
+  .component-records {
+    grid-template-columns: 1fr;
+  }
+  .component-card:first-child {
+    grid-column: auto;
+  }
+  .component-card {
+    padding: 20px;
+  }
+  .component-summary,
+  .kpi-grid,
+  .program-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .component-summary article {
+    padding: 16px;
+  }
+  .component-tabs button {
+    padding: 10px;
+    flex: 1 0 28%;
+  }
+  .pdf-toolbar > a {
+    margin-left: 0;
+  }
+  .pdf-canvas-wrap {
+    max-height: 55vh;
+  }
+  .document-row {
+    flex-wrap: wrap;
+  }
+  .fonset-placeholder h2 {
+    font-size: 23px;
+  }
 }

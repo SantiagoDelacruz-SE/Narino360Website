@@ -3,7 +3,11 @@ import { useState } from "react";
 import { Save, Sparkles, FileJson, Upload } from "lucide-react";
 import {
   MUNICIPALITIES,
-  PROGRAMS,
+  COMPONENTS,
+  RECORD_TYPES,
+  recordTypeOf,
+  type Component,
+  type RecordType,
   parseBulletin,
   validateActivity,
   type Activity,
@@ -11,12 +15,18 @@ import {
 import { api } from "./api";
 export default function ActivityForm({
   activity,
+  initialProgram,
+  initialRecordType,
   onSaved,
 }: {
   activity?: Activity;
+  initialProgram?: Component;
+  initialRecordType?: RecordType;
   onSaved: () => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<Record<string, string | number>>({
+  const [draft, setDraft] = useState<Record<string, string | number | null>>({
+      program: initialProgram ?? "",
+      recordType: initialRecordType ?? recordTypeOf(activity ?? {}),
       ...activity,
     }),
     [report, setReport] = useState(""),
@@ -46,7 +56,10 @@ export default function ActivityForm({
         "weaponsVoluntary",
       ];
       for (const name of numbers)
-        (data as Record<string, unknown>)[name] = Number(data[name]);
+        (data as Record<string, unknown>)[name] =
+          (name === "latitude" || name === "longitude") && data[name] === ""
+            ? null
+            : Number(data[name]);
       const validated = validateActivity({
         ...data,
         budgetApproved: activity?.budgetApproved ?? 0,
@@ -169,7 +182,20 @@ export default function ActivityForm({
       )}
       <form onSubmit={save} className="form-stack">
         <label>
-          Título de la jornada
+          Tipo de registro
+          <select
+            name="recordType"
+            aria-label="Tipo de registro"
+            required
+            {...field("recordType")}
+          >
+            {RECORD_TYPES.map((type) => (
+              <option key={type}>{type}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Título del registro
           <input
             name="title"
             required
@@ -185,7 +211,12 @@ export default function ActivityForm({
           </label>
           <label>
             Municipio
-            <select name="municipality" required {...field("municipality")}>
+            <select
+              name="municipality"
+              aria-label="Municipio"
+              required
+              {...field("municipality")}
+            >
               <option value="">Selecciona un municipio</option>
               {MUNICIPALITIES.map((m) => (
                 <option key={m}>{m}</option>
@@ -193,10 +224,15 @@ export default function ActivityForm({
             </select>
           </label>
           <label>
-            Programa
-            <select name="program" required {...field("program")}>
-              <option value="">Selecciona un programa</option>
-              {PROGRAMS.map((p) => (
+            Componente
+            <select
+              name="program"
+              aria-label="Componente"
+              required
+              {...field("program")}
+            >
+              <option value="">Selecciona un componente</option>
+              {COMPONENTS.map((p) => (
                 <option key={p}>{p}</option>
               ))}
             </select>
@@ -218,7 +254,7 @@ export default function ActivityForm({
               step="any"
               min="0"
               max="3.5"
-              required
+              required={draft.recordType !== "Noticia"}
               {...field("latitude")}
               placeholder="Ej. 1.21"
             />
@@ -231,7 +267,7 @@ export default function ActivityForm({
               step="any"
               min="-79.5"
               max="-75.5"
-              required
+              required={draft.recordType !== "Noticia"}
               {...field("longitude")}
               placeholder="Ej. -77.28"
             />
@@ -240,6 +276,8 @@ export default function ActivityForm({
         <p className="form-help">
           Usa coordenadas decimales de la ubicación real. La validación de rango
           es aproximada y no certifica límites municipales.
+          {draft.recordType === "Noticia" &&
+            " Para noticias, puedes dejar ambas coordenadas vacías. No se incluirán en el mapa ni en los indicadores de intervenciones."}
         </p>
         <div className="form-section-title">Resultados de la intervención</div>
         <div className="field-grid">
@@ -295,7 +333,13 @@ export default function ActivityForm({
             ? "Guardando…"
             : activity
               ? "Guardar cambios"
-              : "Registrar jornada"}
+              : draft.recordType === "Noticia"
+                ? "Publicar noticia"
+                : draft.recordType === "Operativo"
+                  ? "Registrar operativo"
+                  : draft.recordType === "Feria"
+                    ? "Registrar feria"
+                    : "Registrar jornada"}
         </button>
       </form>
     </div>

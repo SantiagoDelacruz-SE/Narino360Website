@@ -10,6 +10,10 @@ import {
   MUNICIPALITIES,
   validateActivity,
   parseBulletin,
+  recordTypeOf,
+  assetComponent,
+  COMPONENTS,
+  type Asset,
 } from "../src/lib/domain";
 const temp = mkdtempSync(join(tmpdir(), "narino360-api-"));
 const origin = "http://127.0.0.1:3138",
@@ -143,6 +147,87 @@ after(async () => {
   }
   db?.db().close();
   rmSync(temp, { recursive: true, force: true });
+});
+
+test("Los componentes y tipos se guardan sin reclasificar registros anteriores; noticias sin coordenadas", async () => {
+  assert.deepEqual(
+    [...COMPONENTS],
+    [
+      "Observatorio",
+      "PISCC",
+      "Banco de Alimentos",
+      "Cultivos para la Paz",
+      "Acción Unificada",
+    ],
+  );
+  assert.equal(recordTypeOf({}), "Actividad");
+  const old = validateActivity(activity);
+  assert.equal(old.recordType, "Actividad");
+  assert.equal(
+    assetComponent({ kind: "publicacion", program: "" } as Asset),
+    "Observatorio",
+  );
+  assert.equal(
+    assetComponent({ kind: "documento", program: "" } as Asset),
+    null,
+  );
+  assert.equal(
+    assetComponent({ kind: "documento", program: "", activityId: 4 } as Asset, [
+      { id: 4, program: "PISCC" },
+    ]),
+    "PISCC",
+  );
+  assert.throws(() =>
+    validateActivity({
+      ...activity,
+      recordType: "Operativo",
+      latitude: null,
+      longitude: null,
+    }),
+  );
+  for (const recordType of [null, "Otra cosa", 5])
+    assert.throws(() => validateActivity({ ...activity, recordType }));
+  assert.throws(() =>
+    validateActivity({ ...activity, program: "Inexistente" }),
+  );
+  assert.throws(() =>
+    validateActivity({
+      ...activity,
+      recordType: "Noticia",
+      latitude: null,
+      longitude: -77,
+    }),
+  );
+  const ids: number[] = [];
+  for (const [index, recordType] of [
+    "Actividad",
+    "Operativo",
+    "Feria",
+    "Noticia",
+  ].entries()) {
+    const value = {
+      ...activity,
+      title: "Tipo " + recordType,
+      program: COMPONENTS[index],
+      recordType,
+      ...(recordType === "Noticia" ? { latitude: null, longitude: null } : {}),
+    };
+    const response = await request("/api/jornadas", "POST", value, admin);
+    assert.equal(response.status, 201, await response.clone().text());
+    const rows = (
+      await (await request("/api/jornadas", "GET", undefined, admin)).json()
+    ).activities;
+    const saved = rows.find((a: { title: string }) => a.title === value.title);
+    assert.equal(saved.recordType, recordType);
+    assert.equal(saved.program, COMPONENTS[index]);
+    if (recordType === "Noticia") assert.equal(saved.latitude, null);
+    ids.push(saved.id);
+  }
+  for (const id of ids)
+    assert.equal(
+      (await request("/api/jornadas", "DELETE", { id }, admin)).status,
+      200,
+    );
 });
 test("Catálogo de 64 municipios únicos y extracción de reportes sin inventar datos", () => {
   assert.equal(MUNICIPALITIES.length, 64);

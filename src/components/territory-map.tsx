@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Activity } from "@/lib/domain";
+import { hasLocation, recordTypeOf, type Activity } from "@/lib/domain";
 import { number } from "./api";
 import { createOsmLayer } from "./osm-layer";
 import "leaflet/dist/leaflet.css";
@@ -47,21 +47,25 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
         map.remove();
       };
       basemap.layer.addTo(map);
+      const located = activities
+        .filter((a) => recordTypeOf(a) !== "Noticia")
+        .filter(hasLocation);
       if (heat) {
-        const max = Math.max(1, ...activities.map((a) => a.people));
+        const max = Math.max(1, ...located.map((a) => a.people));
         L.heatLayer(
-          activities.map(
+          located.map(
             (a) =>
-              [a.latitude, a.longitude, Math.max(0.15, a.people / max)] as [
+              [a.latitude, a.longitude, Math.max(0.35, a.people / max)] as [
                 number,
                 number,
                 number,
               ],
           ),
           {
-            radius: 35,
-            blur: 25,
-            minOpacity: 0.35,
+            radius: 42,
+            blur: 18,
+            minOpacity: 0.68,
+            maxZoom: 9,
             gradient: {
               0.2: "#80BEFF",
               0.5: "#10A13B",
@@ -75,8 +79,11 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
           showCoverageOnHover: false,
           maxClusterRadius: 45,
         });
-        const groups = new Map<string, Activity[]>();
-        activities.forEach((a) => {
+        const groups = new Map<
+          string,
+          (Activity & { latitude: number; longitude: number })[]
+        >();
+        located.forEach((a) => {
           const key = a.latitude + "," + a.longitude;
           groups.set(key, [...(groups.get(key) || []), a]);
         });
@@ -90,6 +97,8 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
             const item = document.createElement("p");
             item.textContent =
               a.title +
+              " · " +
+              recordTypeOf(a) +
               " · " +
               a.program +
               " · " +
@@ -113,9 +122,9 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
         }
         cluster.addTo(map);
       }
-      if (activities.length)
+      if (located.length)
         map.fitBounds(
-          L.latLngBounds(activities.map((a) => [a.latitude, a.longitude])),
+          L.latLngBounds(located.map((a) => [a.latitude, a.longitude])),
           { padding: [45, 45], maxZoom: 11, animate: false },
         );
       setTimeout(() => {
@@ -134,7 +143,11 @@ export default function TerritoryMap({ activities, heat, large }: Props) {
     };
   }, [activities, heat, attempt]);
   return (
-    <div className={"map-container " + (large ? "large" : "")}>
+    <div
+      className={
+        "map-container " + (heat ? "heat-view " : "") + (large ? "large" : "")
+      }
+    >
       <div
         ref={element}
         className="leaflet-map"

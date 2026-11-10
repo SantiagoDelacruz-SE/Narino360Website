@@ -9,8 +9,14 @@ import {
   Plus,
   Search,
   Trash2,
+  Eye,
 } from "lucide-react";
-import { PUBLICATION_TYPES, normalize, type Asset } from "@/lib/domain";
+import {
+  PUBLICATION_TYPES,
+  normalize,
+  type Asset,
+  type Component,
+} from "@/lib/domain";
 import { api, number } from "./api";
 
 const dateLabel = (value: string) =>
@@ -26,12 +32,16 @@ export default function Publications({
   onUpload,
   onRefresh,
   onError,
+  onPreview,
+  component,
 }: {
   assets: Asset[];
   canEdit: boolean;
   onUpload: () => void;
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
+  onPreview: (asset: Asset) => void;
+  component?: Component;
 }) {
   const [type, setType] = useState(""),
     [query, setQuery] = useState(""),
@@ -39,7 +49,8 @@ export default function Publications({
     [until, setUntil] = useState(""),
     [busy, setBusy] = useState(false);
   const publications = useMemo(
-    () => assets.filter((a) => a.kind === "publicacion"),
+    () =>
+      assets.filter((a) => a.kind === "publicacion" || a.kind === "documento"),
     [assets],
   );
   const results = useMemo(
@@ -47,7 +58,7 @@ export default function Publications({
       publications
         .filter(
           (a) =>
-            (!type || a.publicationType === type) &&
+            (!type || (a.publicationType || "Otros productos") === type) &&
             (!query ||
               normalize(a.title + " " + a.caption).includes(
                 normalize(query),
@@ -96,7 +107,11 @@ export default function Publications({
         </div>
         <div>
           <div className="overline">CONOCIMIENTO PARA EL TERRITORIO</div>
-          <h2>Boletines y productos del observatorio</h2>
+          <h2>
+            {!component || component === "Observatorio"
+              ? "Boletines y productos del observatorio"
+              : "Documentos de " + component}
+          </h2>
           <p>
             Consulta los análisis y publicaciones de paz, seguridad y
             convivencia de Nariño.
@@ -247,6 +262,14 @@ export default function Publications({
                 </p>
               </div>
               <footer>
+                <button
+                  className="button primary"
+                  onClick={() => onPreview(asset)}
+                  aria-label={"Previsualizar PDF " + asset.title}
+                >
+                  <Eye size={16} />
+                  Previsualizar PDF
+                </button>
                 <a
                   className="button secondary"
                   href={"/api/media/" + asset.id}

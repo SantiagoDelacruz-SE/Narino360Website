@@ -34,10 +34,18 @@ import {
   X,
   Pencil,
   KeyRound,
+  BookOpen,
+  HardHat,
+  Eye,
 } from "lucide-react";
 import {
   MUNICIPALITIES,
-  PROGRAMS,
+  COMPONENTS,
+  RECORD_TYPES,
+  recordTypeOf,
+  assetComponent,
+  type Component,
+  type RecordType,
   REFERENCES,
   normalize,
   canEditContent,
@@ -52,14 +60,15 @@ import Modal from "./modal";
 import ActivityForm from "./activity-form";
 import MediaUpload from "./media-upload";
 import Presentation from "./presentation";
-import Publications from "./publications";
+import ComponentsHub from "./components-hub";
+import PdfPreview from "./pdf-preview";
 const TerritoryMap = dynamic(() => import("./territory-map"), {
   ssr: false,
   loading: () => <div className="map-loading">Preparando cartografía…</div>,
 });
 const navigation = [
   { id: "resumen", label: "Vista general", icon: LayoutDashboard },
-  { id: "territorio", label: "Mapa territorial", icon: MapPin },
+  { id: "fonset", label: "FONSET", icon: Building2 },
   { id: "jornadas", label: "Jornadas y actividades", icon: ClipboardList },
   { id: "evidencias", label: "Mural de evidencias", icon: Images },
   {
@@ -67,17 +76,23 @@ const navigation = [
     label: "Presentación estratégica",
     icon: PresentationIcon,
   },
-  { id: "observatorio", label: "Observatorio", icon: FileText },
+  { id: "componentes", label: "Componentes", icon: BookOpen },
 ];
 type Tab = (typeof navigation)[number]["id"] | "auditoria";
 type ModalState =
-  | { type: "activity"; activity?: Activity }
+  | {
+      type: "activity";
+      activity?: Activity;
+      initialProgram?: Component;
+      initialRecordType?: RecordType;
+    }
   | { type: "detail"; activity: Activity }
-  | { type: "upload"; kind: Asset["kind"] }
+  | { type: "upload"; kind: Asset["kind"]; initialProgram?: Component }
+  | { type: "pdf"; asset: Asset }
   | { type: "image"; asset: Asset }
   | { type: "account" }
   | null;
-const programIcons = [ShieldCheck, Sprout, Utensils, Users];
+const programIcons = [BookOpen, ShieldCheck, Utensils, Sprout, Users];
 const formatDate = (date: string) =>
   new Intl.DateTimeFormat("es-CO", {
     day: "2-digit",
@@ -104,7 +119,9 @@ export default function Observatory({
     [search, setSearch] = useState(""),
     [since, setSince] = useState(""),
     [until, setUntil] = useState("");
-  const [heat, setHeat] = useState(false),
+  const [recordType, setRecordType] = useState("");
+  const [component, setComponent] = useState<Component | null>(null);
+  const [heat, setHeat] = useState(true),
     [columns, setColumns] = useState(3),
     [modal, setModal] = useState<ModalState>(null),
     [toast, setToast] = useState(""),
@@ -113,7 +130,19 @@ export default function Observatory({
   const canEdit = canEditContent(user.role);
   useEffect(() => {
     const update = () => {
-      const value = window.location.hash.slice(1);
+      const [route, selected] = window.location.hash.slice(1).split("/");
+      let value = route;
+      if (value === "componentes")
+        setComponent(
+          COMPONENTS.find(
+            (name) => normalize(name).replace(/\s+/g, "-") === selected,
+          ) ?? null,
+        );
+      if (value === "territorio") value = "resumen";
+      if (value === "observatorio") {
+        value = "componentes";
+        setComponent("Observatorio");
+      }
       if (
         navigation.some((n) => n.id === value) ||
         (value === "auditoria" && user.role === "Administrador")
@@ -122,10 +151,12 @@ export default function Observatory({
     };
     update();
     window.addEventListener("hashchange", update);
+    window.addEventListener("popstate", update);
     const expire = () => setSessionExpired(true);
     window.addEventListener(SESSION_EXPIRED_EVENT, expire);
     return () => {
       window.removeEventListener("hashchange", update);
+      window.removeEventListener("popstate", update);
       window.removeEventListener(SESSION_EXPIRED_EVENT, expire);
     };
   }, [user.role]);
@@ -134,6 +165,7 @@ export default function Observatory({
       activities.filter(
         (a) =>
           (!program || a.program === program) &&
+          (!recordType || recordTypeOf(a) === recordType) &&
           (!municipality || a.municipality === municipality) &&
           (!since || a.date >= since) &&
           (!until || a.date <= until) &&
@@ -142,24 +174,28 @@ export default function Observatory({
               a.title + " " + a.summary + " " + a.municipality,
             ).includes(normalize(search))),
       ),
-    [activities, program, municipality, since, until, search],
+    [activities, program, recordType, municipality, since, until, search],
   );
   const selectedAssets = useMemo(
     () =>
       assets.filter(
         (a) =>
-          (!program || a.program === program) &&
+          (!program || assetComponent(a, activities) === program) &&
           (!municipality || a.municipality === municipality) &&
           (!since || a.createdAt.slice(0, 10) >= since) &&
           (!until || a.createdAt.slice(0, 10) <= until) &&
           (!search ||
             normalize(a.title + " " + a.caption).includes(normalize(search))),
       ),
-    [assets, program, municipality, since, until, search],
+    [assets, activities, program, municipality, since, until, search],
+  );
+  const territorial = useMemo(
+    () => filtered.filter((a) => recordTypeOf(a) !== "Noticia"),
+    [filtered],
   );
   const totals = useMemo(
     () =>
-      filtered.reduce(
+      territorial.reduce(
         (t, a) => ({
           people: t.people + a.people,
           families: t.families + a.families,
@@ -167,17 +203,32 @@ export default function Observatory({
         }),
         { people: 0, families: 0, weapons: 0 },
       ),
-    [filtered],
+    [territorial],
   );
-  const covered = new Set(filtered.map((a) => a.municipality)).size;
+  const covered = new Set(territorial.map((a) => a.municipality)).size;
   const title =
     tab === "auditoria"
       ? "Auditoría de accesos"
       : navigation.find((n) => n.id === tab)?.label || "Vista general";
   function navigate(id: Tab) {
+    if (id === "componentes") {
+      selectComponent(null);
+      return;
+    }
     setTab(id);
     setMenu(false);
     window.history.pushState(null, "", "#" + id);
+  }
+  function selectComponent(value: Component | null) {
+    setComponent(value);
+    setTab("componentes");
+    setMenu(false);
+    window.history.pushState(
+      null,
+      "",
+      "#componentes" +
+        (value ? "/" + normalize(value).replace(/\s+/g, "-") : ""),
+    );
   }
   async function refresh() {
     const [a, m] = await Promise.all([
@@ -194,13 +245,14 @@ export default function Observatory({
   }
   function reset() {
     setProgram("");
+    setRecordType("");
     setMunicipality("");
     setSearch("");
     setSince("");
     setUntil("");
   }
   const filtersActive = Boolean(
-    program || municipality || search || since || until,
+    program || recordType || municipality || search || since || until,
   );
   function exportRows() {
     if (!filtered.length) {
@@ -213,7 +265,8 @@ export default function Observatory({
         Fecha: a.date,
         Titulo: a.title,
         Municipio: a.municipality,
-        Programa: a.program,
+        Componente: a.program,
+        Tipo: recordTypeOf(a),
         Latitud: a.latitude,
         Longitud: a.longitude,
         Personas: a.people,
@@ -377,7 +430,10 @@ export default function Observatory({
                   : "Información territorial para acompañar la gestión institucional."}
               </p>
             </div>
-            <div className="heading-actions" hidden={tab === "observatorio"}>
+            <div
+              className="heading-actions"
+              hidden={tab === "componentes" || tab === "fonset"}
+            >
               <button className="button secondary" onClick={exportRows}>
                 <ArrowDownToLine size={16} />
                 Exportar datos
@@ -428,7 +484,8 @@ export default function Observatory({
           )}
           {tab !== "presentacion" &&
             tab !== "auditoria" &&
-            tab !== "observatorio" && (
+            tab !== "componentes" &&
+            tab !== "fonset" && (
               <section
                 className="filter-bar"
                 aria-label="Filtros de información"
@@ -438,13 +495,13 @@ export default function Observatory({
                   <span>Filtrar por</span>
                 </div>
                 <label>
-                  <span className="sr-only">Programa</span>
+                  <span className="sr-only">Componente</span>
                   <select
                     value={program}
                     onChange={(e) => setProgram(e.target.value)}
                   >
-                    <option value="">Todos los programas</option>
-                    {PROGRAMS.map((p) => (
+                    <option value="">Todos los componentes</option>
+                    {COMPONENTS.map((p) => (
                       <option key={p}>{p}</option>
                     ))}
                   </select>
@@ -458,6 +515,19 @@ export default function Observatory({
                     <option value="">Todos los municipios</option>
                     {MUNICIPALITIES.map((m) => (
                       <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="sr-only">Tipo de registro</span>
+                  <select
+                    aria-label="Filtrar tipo de registro"
+                    value={recordType}
+                    onChange={(e) => setRecordType(e.target.value)}
+                  >
+                    <option value="">Todos los registros</option>
+                    {RECORD_TYPES.map((type) => (
+                      <option key={type}>{type}</option>
                     ))}
                   </select>
                 </label>
@@ -493,12 +563,16 @@ export default function Observatory({
                 </button>
               </section>
             )}
-          {tab !== "observatorio" && since && until && since > until && (
-            <div className="notice error">
-              La fecha inicial es posterior a la fecha final. Ajusta el rango de
-              consulta.
-            </div>
-          )}
+          {tab !== "componentes" &&
+            tab !== "fonset" &&
+            since &&
+            until &&
+            since > until && (
+              <div className="notice error">
+                La fecha inicial es posterior a la fecha final. Ajusta el rango
+                de consulta.
+              </div>
+            )}
           {tab === "resumen" && (
             <>
               <section className="strategy-banner">
@@ -540,17 +614,32 @@ export default function Observatory({
               <div className="section-heading compact">
                 <div>
                   <h2>La gestión, en cifras</h2>
-                  <p>Resultados calculados a partir de las jornadas cargadas</p>
+                  <p>
+                    Resultados de las actividades y los operativos registrados
+                  </p>
                 </div>
                 <span className="subtle-tag">CORTE DE LA CONSULTA</span>
               </div>
               <div className="kpi-grid">
                 <Kpi
                   icon={ActivityIcon}
-                  label="Jornadas ejecutadas"
-                  value={number(filtered.length)}
-                  note="Actividades registradas"
+                  label="Actividades ejecutadas"
+                  value={number(
+                    territorial.filter((a) => recordTypeOf(a) !== "Operativo")
+                      .length,
+                  )}
+                  note="Jornadas y ferias registradas"
                   color="green"
+                />
+                <Kpi
+                  icon={Shield}
+                  label="Operativos ejecutados"
+                  value={number(
+                    territorial.filter((a) => recordTypeOf(a) === "Operativo")
+                      .length,
+                  )}
+                  note="Operativos registrados"
+                  color="rose"
                 />
                 <Kpi
                   icon={MapPin}
@@ -583,7 +672,11 @@ export default function Observatory({
                 />
               </div>
               <div className="territory-grid">
-                <MapPanel activities={filtered} heat={heat} setHeat={setHeat} />
+                <MapPanel
+                  activities={territorial}
+                  heat={heat}
+                  setHeat={setHeat}
+                />
                 <aside className="panel coverage-panel">
                   <div className="panel-heading">
                     <div>
@@ -610,7 +703,7 @@ export default function Observatory({
                   <div className="coverage-summary">
                     <span>
                       <i className="legend-dot" />
-                      Con jornadas
+                      Con intervenciones
                     </span>
                     <strong>{covered}</strong>
                   </div>
@@ -627,15 +720,21 @@ export default function Observatory({
                   </p>
                   <button
                     className="text-link"
-                    onClick={() => navigate("territorio")}
+                    onClick={() => {
+                      setHeat(true);
+                      document.querySelector(".map-panel")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
+                    }}
                   >
-                    Explorar el territorio
+                    Ver mapa de calor
                     <ArrowRight size={15} />
                   </button>
                 </aside>
               </div>
               <section className="program-grid">
-                {PROGRAMS.map((p, i) => {
+                {COMPONENTS.map((p, i) => {
                   const Icon = programIcons[i],
                     rows = filtered.filter((a) => a.program === p);
                   return (
@@ -643,8 +742,7 @@ export default function Observatory({
                       className={"program-card pc-" + i}
                       key={p}
                       onClick={() => {
-                        setProgram(p);
-                        navigate("jornadas");
+                        selectComponent(p);
                       }}
                     >
                       <span className="program-icon">
@@ -652,9 +750,31 @@ export default function Observatory({
                       </span>
                       <h3>{p}</h3>
                       <p>
-                        {number(rows.length)} jornadas <span>·</span>{" "}
-                        {new Set(rows.map((a) => a.municipality)).size}{" "}
-                        municipios
+                        <span>
+                          {number(
+                            rows.filter((a) =>
+                              ["Actividad", "Feria"].includes(recordTypeOf(a)),
+                            ).length,
+                          )}{" "}
+                          actividades
+                        </span>
+                        <span>
+                          {number(
+                            rows.filter((a) => recordTypeOf(a) === "Operativo")
+                              .length,
+                          )}{" "}
+                          operativos
+                        </span>
+                        <span>
+                          {
+                            new Set(
+                              rows
+                                .filter((a) => recordTypeOf(a) !== "Noticia")
+                                .map((a) => a.municipality),
+                            ).size
+                          }{" "}
+                          municipios
+                        </span>
                       </p>
                       <ArrowRight size={16} className="program-arrow" />
                     </button>
@@ -664,7 +784,7 @@ export default function Observatory({
               <section className="panel">
                 <div className="panel-heading">
                   <div>
-                    <h2>Últimas jornadas registradas</h2>
+                    <h2>Últimos registros</h2>
                     <p>Seguimiento a las acciones en el territorio</p>
                   </div>
                   <button
@@ -693,35 +813,29 @@ export default function Observatory({
               </div>
             </>
           )}
-          {tab === "territorio" && (
-            <>
-              <div className="section-heading">
-                <div>
-                  <h2>64 municipios, una mirada territorial</h2>
-                  <p>
-                    {filtered.length} jornadas · {covered} municipios con
-                    registros en esta consulta
-                  </p>
-                </div>
+          {tab === "fonset" && (
+            <section className="panel fonset-placeholder">
+              <span className="construction-tag">
+                <HardHat size={18} />
+                En construcción
+              </span>
+              <div className="fonset-symbol">
+                <Building2 size={48} />
               </div>
-              <MapPanel
-                activities={filtered}
-                heat={heat}
-                setHeat={setHeat}
-                large
-              />
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>Registros georreferenciados</h2>
-                </div>
-                <ActivityTable
-                  rows={filtered}
-                  canEdit={canEdit}
-                  filtersActive={filtersActive}
-                  onModal={setModal}
-                />
-              </section>
-            </>
+              <span className="overline">
+                FONDO TERRITORIAL DE SEGURIDAD Y CONVIVENCIA CIUDADANA
+              </span>
+              <h2>Presupuesto y proyectos FONSET</h2>
+              <p>
+                Estamos preparando un espacio para consultar el presupuesto, los
+                proyectos y el seguimiento a los recursos del FONSET.
+              </p>
+              <div className="fonset-future">
+                <span>Presupuesto · Próximamente</span>
+                <span>Proyectos · Próximamente</span>
+                <span>Seguimiento · Próximamente</span>
+              </div>
+            </section>
           )}
           {tab === "jornadas" && (
             <section className="panel">
@@ -869,6 +983,14 @@ export default function Observatory({
                           {a.activityId ? "· Jornada #" + a.activityId : ""}
                         </small>
                       </div>
+                      <button
+                        className="button primary"
+                        onClick={() => setModal({ type: "pdf", asset: a })}
+                        aria-label={"Previsualizar PDF " + a.title}
+                      >
+                        <Eye size={16} />
+                        Previsualizar
+                      </button>
                       <a
                         href={"/api/media/" + a.id}
                         className="button secondary"
@@ -905,11 +1027,30 @@ export default function Observatory({
               onError={setError}
             />
           )}
-          {tab === "observatorio" && (
-            <Publications
+          {tab === "componentes" && (
+            <ComponentsHub
+              key={component ?? "home"}
+              component={component}
+              onSelect={selectComponent}
+              activities={activities}
               assets={assets}
               canEdit={canEdit}
-              onUpload={() => setModal({ type: "upload", kind: "publicacion" })}
+              onCreate={(type, name) =>
+                setModal({
+                  type: "activity",
+                  initialProgram: name,
+                  initialRecordType: type,
+                })
+              }
+              onOpen={(activity) => setModal({ type: "detail", activity })}
+              onUpload={(name) =>
+                setModal({
+                  type: "upload",
+                  kind: "publicacion",
+                  initialProgram: name,
+                })
+              }
+              onPreview={(asset) => setModal({ type: "pdf", asset })}
               onRefresh={refresh}
               onError={setError}
             />
@@ -925,11 +1066,22 @@ export default function Observatory({
       </div>
       {modal?.type === "activity" && (
         <Modal
-          title={modal.activity ? "Editar jornada" : "Registrar nueva jornada"}
+          title={
+            modal.activity
+              ? "Editar registro"
+              : modal.initialRecordType === "Noticia"
+                ? "Publicar noticia"
+                : "Registrar actividad, operativo o novedad"
+          }
           onClose={() => setModal(null)}
           wide
         >
-          <ActivityForm activity={modal.activity} onSaved={saved} />
+          <ActivityForm
+            activity={modal.activity}
+            initialProgram={modal.initialProgram}
+            initialRecordType={modal.initialRecordType}
+            onSaved={saved}
+          />
         </Modal>
       )}
       {modal?.type === "upload" && (
@@ -947,6 +1099,7 @@ export default function Observatory({
         >
           <MediaUpload
             kind={modal.kind}
+            initialProgram={modal.initialProgram}
             activities={activities}
             onSaved={saved}
             onRefresh={refresh}
@@ -959,17 +1112,23 @@ export default function Observatory({
           {assets
             .filter((a) => a.activityId === modal.activity.id)
             .map((a) => (
-              <a
+              <button
                 key={a.id}
-                href={"/api/media/" + a.id}
-                target="_blank"
-                rel="noreferrer"
                 className="document-row"
+                onClick={() =>
+                  setModal({
+                    type:
+                      a.kind === "documento" || a.kind === "publicacion"
+                        ? "pdf"
+                        : "image",
+                    asset: a,
+                  })
+                }
               >
                 <FileText size={18} />
                 {a.title}
                 <ArrowRight size={16} />
-              </a>
+              </button>
             ))}
           {canEdit && (
             <div className="inline-actions">
@@ -1009,6 +1168,11 @@ export default function Observatory({
               )}
             </div>
           )}
+        </Modal>
+      )}
+      {modal?.type === "pdf" && (
+        <Modal title={modal.asset.title} onClose={() => setModal(null)} wide>
+          <PdfPreview asset={modal.asset} />
         </Modal>
       )}
       {modal?.type === "image" && (
@@ -1108,7 +1272,9 @@ function Empty({
 function ActivityDetail({ activity: a }: { activity: Activity }) {
   return (
     <div className="activity-detail">
-      <span className="program-tag">{a.program}</span>
+      <span className="program-tag">
+        {a.program} · {recordTypeOf(a)}
+      </span>
       <div className="detail-meta">
         <span>
           <MapPin size={15} />
@@ -1119,7 +1285,9 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
           {formatDate(a.date)}
         </span>
         <span>
-          {a.latitude}, {a.longitude}
+          {a.latitude === null || a.longitude === null
+            ? "Sin coordenadas registradas"
+            : a.latitude + ", " + a.longitude}
         </span>
       </div>
       <h3>Objetivo</h3>
@@ -1661,7 +1829,7 @@ function MapPanel({
       <div className="panel-heading">
         <div>
           <h2>Presencia en el territorio</h2>
-          <p>Distribución geográfica de las jornadas registradas</p>
+          <p>Distribución geográfica de actividades, ferias y operativos</p>
         </div>
         <div className="segmented">
           <button
@@ -1682,12 +1850,17 @@ function MapPanel({
       <div className="map-legend">
         <span>
           <i className="legend-dot" />
-          Jornadas registradas
+          Intervenciones registradas
         </span>
         <span>
-          {heat
-            ? "Intensidad relativa según personas reportadas"
-            : "Marcadores agrupados · selecciona para ver resultados"}
+          {heat ? (
+            <>
+              <span className="heat-scale" aria-hidden="true" />
+              Menor a mayor intensidad · personas reportadas
+            </>
+          ) : (
+            "Marcadores agrupados · selecciona para ver resultados"
+          )}
         </span>
       </div>
     </section>
@@ -1711,9 +1884,9 @@ function ActivityTable({
       <table>
         <thead>
           <tr>
-            <th>Jornada / actividad</th>
+            <th>Registro</th>
             <th>Municipio</th>
-            <th>Programa</th>
+            <th>Componente</th>
             <th>Personas</th>
             {!compact && <th>Fecha</th>}
             <th>
@@ -1731,6 +1904,13 @@ function ActivityTable({
                 >
                   {a.title}
                 </button>
+                <span
+                  className={
+                    "record-type type-" + recordTypeOf(a).toLowerCase()
+                  }
+                >
+                  {recordTypeOf(a)}
+                </span>
                 <small>
                   {compact
                     ? formatDate(a.date)
@@ -1741,7 +1921,7 @@ function ActivityTable({
               <td>
                 <span
                   className={
-                    "program-tag program-" + PROGRAMS.indexOf(a.program)
+                    "program-tag program-" + COMPONENTS.indexOf(a.program)
                   }
                 >
                   {a.program}
