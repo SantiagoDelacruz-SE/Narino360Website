@@ -3394,6 +3394,21 @@ td small {
   border-radius: 6px;
   text-align: right;
 }
+.map-view-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.map-container.heat-view .leaflet-tile-pane {
+  opacity: 0.75;
+}
+.point-color-scale .heat-color-scale {
+  width: 82px;
+  height: 10px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #80beff, #10a13b, #ffd500, #da1c24);
+}
 .point-color-scale {
   display: inline-flex;
   align-items: center;
@@ -3418,5 +3433,8 @@ td small {
   }
   .map-record-count {
     text-align: left;
+  }
+  .map-view-controls {
+    align-items: flex-start;
   }
 }

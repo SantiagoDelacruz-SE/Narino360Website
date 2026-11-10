@@ -68,6 +68,12 @@ anteriores y nuevos.
   rojo). El mapa base conserva su apariencia normal. Contadores separados
   de actividades (incluidas ferias) y operativos. Filtros por componente, tipo de
   registro, municipio y fechas; exportación CSV con el tipo de registro.
+  El selector **Puntos individuales / Mapa de calor** permite cambiar entre
+  registros seleccionables y una capa continua de intensidad, conservando los
+  mismos filtros y registros. La vista inicial es Puntos individuales. El calor
+  se calcula con las coordenadas originales, sin los desplazamientos visuales
+  que separan símbolos coincidentes. Los registros sin cifras de personas
+  conservan una intensidad mínima de presencia.
 - FONSET sustituye la navegación independiente de Mapa territorial. Muestra
   **En construcción** para el futuro presupuesto y los proyectos; todavía no
   registra cifras presupuestales ni proyectos.

@@ -1564,7 +1564,7 @@ test("36 registros coincidentes tienen 36 puntos seleccionables con colores y co
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Mapa de calor", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveAttribute("aria-pressed", "false");
   await expect
     .poll(() =>
       markers.evaluateAll((items) => {
@@ -1625,6 +1625,41 @@ test("36 registros coincidentes tienen 36 puntos seleccionables con colores y co
     .getByRole("dialog")
     .getByRole("button", { name: "Cerrar", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "Mapa de calor", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Mapa de calor", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const heatCanvas = page.locator(".leaflet-heatmap-layer");
+  await expect(heatCanvas).toBeVisible();
+  await expect(markers).toHaveCount(0);
+  await expect(page.locator(".map-record-count")).toContainText(
+    "36 registros · mapa de calor",
+  );
+  await expect
+    .poll(() =>
+      heatCanvas.evaluate((canvas: HTMLCanvasElement) => {
+        const data = canvas
+          .getContext("2d")!
+          .getImageData(0, 0, canvas.width, canvas.height).data;
+        for (let i = 3; i < data.length; i += 4) if (data[i] > 80) return true;
+        return false;
+      }),
+    )
+    .toBe(true);
+  await page
+    .locator(".map-panel")
+    .screenshot({
+      path: testInfo.outputPath("36-registros-mapa-calor.png"),
+      animations: "disabled",
+    });
+  await page
+    .getByRole("button", { name: "Puntos individuales", exact: true })
+    .click();
+  await expect(markers).toHaveCount(36);
+  await expect(heatCanvas).toHaveCount(0);
+  await expect(page.locator(".marker-cluster")).toHaveCount(0);
   await page.locator(".leaflet-control-zoom-in").click();
   await expect(markers).toHaveCount(36);
   await page.setViewportSize({ width: 390, height: 844 });

@@ -77,6 +77,8 @@ ni quitar el rol al último administrador activo.
 - Una fotografía cargada aparece en el mural y una diapositiva en el carrusel.
 - Vista general abre puntos individuales de color y su leyenda, sin grupos que
   oculten actividades coincidentes. Al pulsar cada punto aparece su registro.
+  El selector **Mapa de calor** abre la capa de intensidad y **Puntos
+  individuales** recupera todos los marcadores de la misma consulta.
   Los contadores
   distinguen actividades de operativos y FONSET muestra **En construcción**.
 - Componentes muestra Observatorio, PISCC, Banco de Alimentos, Cultivos para la

@@ -1,16 +1,22 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { hasLocation, recordTypeOf, type Activity } from "@/lib/domain";
-import { pointColor, separatePoints } from "@/lib/map-points";
+import { MAP_COLORS, pointColor, separatePoints } from "@/lib/map-points";
 import { createOsmLayer } from "./osm-layer";
 import "leaflet/dist/leaflet.css";
 
 type Props = {
   activities: Activity[];
   onOpen: (activity: Activity) => void;
+  heat?: boolean;
   large?: boolean;
 };
-export default function TerritoryMap({ activities, onOpen, large }: Props) {
+export default function TerritoryMap({
+  activities,
+  onOpen,
+  heat = false,
+  large,
+}: Props) {
   const element = useRef<HTMLDivElement>(null),
     open = useRef(onOpen);
   const [tileError, setTileError] = useState<string | null>(null);
@@ -23,6 +29,7 @@ export default function TerritoryMap({ activities, onOpen, large }: Props) {
     let cancelled = false;
     async function init() {
       const L = (await import("leaflet")).default;
+      if (heat) await import("leaflet.heat");
       if (cancelled || !element.current) return;
       const map = L.map(element.current, {
         scrollWheelZoom: false,
@@ -57,8 +64,34 @@ export default function TerritoryMap({ activities, onOpen, large }: Props) {
         .filter(hasLocation)
         .sort((a, b) => a.id - b.id);
       const maximum = Math.max(0, ...located.map((a) => a.people));
+      if (heat) {
+        // Heat always uses the original coordinates, not the display offsets
+        // that make coincident markers independently selectable.
+        L.heatLayer(
+          located.map(
+            (activity) =>
+              [
+                activity.latitude,
+                activity.longitude,
+                Math.max(0.2, maximum > 0 ? activity.people / maximum : 0.2),
+              ] as [number, number, number],
+          ),
+          {
+            radius: 28,
+            blur: 20,
+            minOpacity: 0.4,
+            maxZoom: 12,
+            gradient: {
+              0.2: MAP_COLORS[0],
+              0.5: MAP_COLORS[1],
+              0.8: MAP_COLORS[2],
+              1: MAP_COLORS[3],
+            },
+          },
+        ).addTo(map);
+      }
       const links = L.layerGroup().addTo(map);
-      const markers = located.map((activity) => {
+      const markers = (heat ? [] : located).map((activity) => {
         const dot = document.createElement("span");
         dot.style.backgroundColor = pointColor(activity.people, maximum);
         dot.setAttribute("aria-hidden", "true");
@@ -149,20 +182,32 @@ export default function TerritoryMap({ activities, onOpen, large }: Props) {
       cancelled = true;
       cleanup();
     };
-  }, [activities, attempt]);
+  }, [activities, attempt, heat]);
   return (
-    <div className={"map-container point-map " + (large ? "large" : "")}>
+    <div
+      className={
+        "map-container " +
+        (heat ? "heat-view " : "point-map ") +
+        (large ? "large" : "")
+      }
+    >
       <div
         ref={element}
         className="leaflet-map"
-        aria-label="Mapa de actividades y operativos individuales en Nariño"
+        aria-label={
+          heat
+            ? "Mapa de calor de actividades y operativos en Nariño"
+            : "Mapa de actividades y operativos individuales en Nariño"
+        }
       />
       {tileError && (
         <div className="map-feedback" role="status">
           <strong>Mapa base no disponible</strong>
           <p>
-            {tileError} Los puntos individuales y sus detalles siguen
-            disponibles.
+            {tileError}{" "}
+            {heat
+              ? "La capa de calor sigue disponible."
+              : "Los puntos individuales y sus detalles siguen disponibles."}
           </p>
           <button
             className="button secondary"
