@@ -106,6 +106,7 @@ export type ActivityInput = {
   title: string;
   date: string;
   municipality: string;
+  municipalities?: string[];
   program: Program;
   latitude: number | null;
   longitude: number | null;
@@ -151,6 +152,52 @@ export type Asset = {
 export const recordTypeOf = (
   activity: Pick<ActivityInput, "recordType">,
 ): RecordType => activity.recordType ?? "Actividad";
+export function activityMunicipalities(
+  activity: Pick<ActivityInput, "municipality" | "municipalities">,
+): string[] {
+  return activity.municipalities?.length
+    ? [...new Set(activity.municipalities)]
+    : [activity.municipality];
+}
+export function activityMetrics(
+  activities: readonly Activity[],
+  municipality = "",
+) {
+  const records = activities.filter(
+    (a) =>
+      recordTypeOf(a) !== "Noticia" &&
+      (!municipality || activityMunicipalities(a).includes(municipality)),
+  );
+  const local = municipality
+    ? records.filter((a) => activityMunicipalities(a).length === 1)
+    : records;
+  const knownPeople = local.filter((a) => a.people !== null);
+  return {
+    activityCount: records.length,
+    municipalityCount: new Set(
+      records
+        .flatMap(activityMunicipalities)
+        .filter((m) => !municipality || m === municipality),
+    ).size,
+    people: knownPeople.length
+      ? knownPeople.reduce((n, a) => n + (a.people ?? 0), 0)
+      : records.length
+        ? null
+        : 0,
+    families: local.length
+      ? local.reduce((n, a) => n + a.families, 0)
+      : records.length
+        ? null
+        : 0,
+    weapons: local.length
+      ? local.reduce((n, a) => n + a.weaponsSeized + a.weaponsVoluntary, 0)
+      : records.length
+        ? null
+        : 0,
+    unknownPeopleCount: local.filter((a) => a.people === null).length,
+    sharedResultCount: municipality ? records.length - local.length : 0,
+  };
+}
 export function hasLocation(
   activity: Activity,
 ): activity is Activity & { latitude: number; longitude: number } {
@@ -202,6 +249,19 @@ export function parseBulletin(text: string): Partial<ActivityInput> {
   );
   const found = explicit || (matches.length === 1 ? matches[0] : undefined);
   if (found) result.municipality = found;
+  const multiple = t.match(/\bmunicipios\s+(?:de\s*)?:?\s*([^.;\n]+)/);
+  if (multiple) {
+    const named = municipalities
+      .filter((m) => new RegExp("\\b" + normalize(m) + "\\b").test(multiple[1]))
+      .sort(
+        (a, b) =>
+          multiple[1].indexOf(normalize(a)) - multiple[1].indexOf(normalize(b)),
+      );
+    if (named.length > 1) {
+      result.municipalities = named;
+      result.municipality = named[0];
+    }
+  }
   const program = PROGRAMS.find((p) => t.includes(normalize(p)));
   if (program) result.program = program;
   const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
@@ -270,7 +330,24 @@ export function validateActivity(value: unknown): ActivityInput {
     new Date(date).toISOString().slice(0, 10) !== date
   )
     throw new AppError("Fecha no válida.");
-  const municipality = textField(a.municipality, "Municipio");
+  let municipalities: string[] | undefined;
+  if (a.municipalities !== undefined) {
+    if (
+      !Array.isArray(a.municipalities) ||
+      !a.municipalities.length ||
+      a.municipalities.length > 64
+    )
+      throw new AppError("Selecciona de 1 a 64 municipios de Nariño.");
+    municipalities = [
+      ...new Set(a.municipalities.map((m) => textField(m, "Municipio", 100))),
+    ];
+    if (
+      municipalities.some((m) => !MUNICIPALITIES.some((known) => known === m))
+    )
+      throw new AppError("Selecciona municipios válidos de Nariño.");
+  }
+  const municipality =
+    municipalities?.[0] ?? textField(a.municipality, "Municipio");
   if (!MUNICIPALITIES.some((m) => m === municipality))
     throw new AppError("Selecciona un municipio de Nariño.");
   const program = textField(a.program, "Programa") as Program;
@@ -305,6 +382,7 @@ export function validateActivity(value: unknown): ActivityInput {
     title: textField(a.title, "Título", 200),
     date,
     municipality,
+    ...(municipalities ? { municipalities } : {}),
     program,
     latitude: withoutCoordinates ? null : (a.latitude as number),
     longitude: withoutCoordinates ? null : (a.longitude as number),

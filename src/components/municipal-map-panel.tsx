@@ -1,7 +1,12 @@
 "use client";
 import { useId, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { COMPONENTS, recordTypeOf, type Activity } from "@/lib/domain";
+import {
+  COMPONENTS,
+  recordTypeOf,
+  activityMunicipalities,
+  type Activity,
+} from "@/lib/domain";
 import {
   COMPONENT_COLORS,
   RECURRENCE_SCALE,
@@ -19,24 +24,29 @@ const TerritoryMap = dynamic(() => import("./territory-map"), {
 export default function MunicipalMapPanel({
   activities,
   onOpen,
+  municipality = "",
 }: {
   activities: Activity[];
   onOpen: (activity: Activity) => void;
+  municipality?: string;
 }) {
   const [heat, setHeat] = useState(false);
   const [selected, setSelected] = useState("");
   const municipalitySelectId = useId();
   const summaries = useMemo(
-    () => summarizeMunicipalities(activities),
-    [activities],
+    () => summarizeMunicipalities(activities, municipality),
+    [activities, municipality],
   );
   const active = summaries.filter((s) => s.records.length > 0);
-  const located = summaries.flatMap((s) => s.records);
+  const located = new Set(summaries.flatMap((s) => s.records.map((a) => a.id)));
   const territorialRecords = activities.filter(
     (a) => recordTypeOf(a) !== "Noticia",
   );
-  const unassigned = territorialRecords.length - located.length;
-  const current = summaries.find((s) => s.name === selected);
+  const unassigned = territorialRecords.filter(
+    (a) => !located.has(a.id),
+  ).length;
+  const chosen = municipality || selected;
+  const current = summaries.find((s) => s.name === chosen);
   const records = [...(current ? current.records : territorialRecords)].sort(
     (a, b) => b.date.localeCompare(a.date) || b.id - a.id,
   );
@@ -69,8 +79,9 @@ export default function MunicipalMapPanel({
             </button>
           </div>
           <span className="map-record-count" role="status">
-            {number(territorialRecords.length)} acciones · {active.length} de 64
-            municipios
+            {number(territorialRecords.length)}{" "}
+            {territorialRecords.length === 1 ? "acción" : "acciones"} ·{" "}
+            {active.length} de 64 municipios
           </span>
         </div>
       </div>
@@ -79,7 +90,7 @@ export default function MunicipalMapPanel({
           <TerritoryMap
             summaries={summaries}
             heat={heat}
-            selectedMunicipality={selected}
+            selectedMunicipality={chosen}
             onSelect={setSelected}
           />
           <div className="municipal-legend" aria-label="Leyenda del mapa">
@@ -117,7 +128,8 @@ export default function MunicipalMapPanel({
             <label htmlFor={municipalitySelectId}>Explorar municipio</label>
             <select
               id={municipalitySelectId}
-              value={selected}
+              value={chosen}
+              disabled={Boolean(municipality)}
               onChange={(event) => setSelected(event.target.value)}
             >
               <option value="">Todos los municipios</option>
@@ -132,8 +144,11 @@ export default function MunicipalMapPanel({
           </div>
           <div className="municipal-list-heading">
             <h3>{current ? current.name : "Todas las acciones"}</h3>
-            <span role="status">{number(records.length)} registros</span>
-            {selected && (
+            <span role="status">
+              {number(records.length)}{" "}
+              {records.length === 1 ? "registro" : "registros"}
+            </span>
+            {selected && !municipality && (
               <button
                 className="municipal-reset"
                 onClick={() => setSelected("")}
@@ -171,7 +186,8 @@ export default function MunicipalMapPanel({
                 </span>
                 <strong>{a.title}</strong>
                 <span>
-                  {a.municipality} · {a.date.split("-").reverse().join("/")}
+                  {activityMunicipalities(a).join(", ")} ·{" "}
+                  {a.date.split("-").reverse().join("/")}
                 </span>
                 <span className="map-record-open">Ver registro →</span>
               </button>
@@ -189,7 +205,9 @@ export default function MunicipalMapPanel({
           ? "Cada actividad, operativo o feria cuenta como una acción. El color indica cuántas se registraron en el municipio dentro de los filtros actuales; no mide beneficiarios."
           : "El número indica el total de acciones del municipio; el anillo muestra sus componentes. Selecciona un municipio para consultar cada registro."}{" "}
         Las ubicaciones son referencias municipales, no sitios exactos de
-        ejecución. Las noticias se consultan en Componentes.
+        ejecución. Las noticias se consultan en Componentes. Una actividad
+        compartida aparece en cada municipio seleccionado, pero se cuenta una
+        sola vez en el total de acciones.
       </p>
       {unassigned > 0 && (
         <p className="map-point-note" role="status">

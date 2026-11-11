@@ -6,6 +6,8 @@ import {
   COMPONENTS,
   RECORD_TYPES,
   recordTypeOf,
+  activityMunicipalities,
+  normalize,
   type Component,
   type RecordType,
   parseBulletin,
@@ -24,22 +26,34 @@ export default function ActivityForm({
   initialRecordType?: RecordType;
   onSaved: () => Promise<void>;
 }) {
+  const { municipalities: _members, ...activityFields } = activity ?? {};
+  void _members;
+  const [municipalities, setMunicipalities] = useState<string[]>(() =>
+    activity ? activityMunicipalities(activity) : [],
+  );
+  const [municipalitySearch, setMunicipalitySearch] = useState("");
   const [draft, setDraft] = useState<Record<string, string | number | null>>({
       program: initialProgram ?? "",
       recordType: initialRecordType ?? recordTypeOf(activity ?? {}),
-      ...activity,
+      ...activityFields,
     }),
     [report, setReport] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [importRows, setImportRows] = useState<unknown[] | null>(null);
+  const multiple =
+    draft.program === "Banco de Alimentos" || municipalities.length > 1;
   const field = (key: string) => ({
     value: draft[key] ?? "",
     onChange: (
       event: React.ChangeEvent<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >,
-    ) => setDraft({ ...draft, [key]: event.target.value }),
+    ) => {
+      setDraft({ ...draft, [key]: event.target.value });
+      if (key === "municipality")
+        setMunicipalities(event.target.value ? [event.target.value] : []);
+    },
   });
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +77,11 @@ export default function ActivityForm({
             : Number(data[name]);
       const validated = validateActivity({
         ...data,
+        ...(multiple
+          ? { municipalities }
+          : activity?.municipalities
+            ? { municipalities: [String(data.municipality)] }
+            : {}),
         budgetApproved: activity?.budgetApproved ?? 0,
         budgetExecuted: activity?.budgetExecuted ?? 0,
       });
@@ -118,7 +137,12 @@ export default function ActivityForm({
               className="button secondary"
               disabled={!report.trim()}
               onClick={() => {
-                setDraft({ ...draft, ...parseBulletin(report) });
+                const { municipalities: suggested, ...fields } =
+                  parseBulletin(report);
+                setDraft({ ...draft, ...fields });
+                if (suggested) setMunicipalities(suggested);
+                else if (fields.municipality)
+                  setMunicipalities([fields.municipality]);
                 setError("");
               }}
             >
@@ -210,20 +234,22 @@ export default function ActivityForm({
             Fecha
             <input name="date" type="date" required {...field("date")} />
           </label>
-          <label>
-            Municipio
-            <select
-              name="municipality"
-              aria-label="Municipio"
-              required
-              {...field("municipality")}
-            >
-              <option value="">Selecciona un municipio</option>
-              {MUNICIPALITIES.map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
-          </label>
+          {!multiple && (
+            <label>
+              Municipio
+              <select
+                name="municipality"
+                aria-label="Municipio"
+                required
+                {...field("municipality")}
+              >
+                <option value="">Selecciona un municipio</option>
+                {MUNICIPALITIES.map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Componente
             <select
@@ -231,6 +257,15 @@ export default function ActivityForm({
               aria-label="Componente"
               required
               {...field("program")}
+              onChange={(e) => {
+                setDraft({ ...draft, program: e.target.value });
+                if (
+                  e.target.value === "Banco de Alimentos" &&
+                  !municipalities.length &&
+                  draft.municipality
+                )
+                  setMunicipalities([String(draft.municipality)]);
+              }}
             >
               <option value="">Selecciona un componente</option>
               {COMPONENTS.map((p) => (
@@ -272,11 +307,54 @@ export default function ActivityForm({
             />
           </label>
         </div>
+        {multiple && (
+          <fieldset className="activity-municipalities">
+            <legend>
+              Municipios de la actividad ({municipalities.length} seleccionados)
+            </legend>
+            {municipalities.length > 0 && (
+              <p className="activity-selected-municipalities">
+                Seleccionados: {municipalities.join(" · ")}
+              </p>
+            )}
+            <input
+              aria-label="Buscar municipio de la actividad"
+              placeholder="Buscar municipio"
+              value={municipalitySearch}
+              onChange={(e) => setMunicipalitySearch(e.target.value)}
+            />
+            <div>
+              {MUNICIPALITIES.filter((m) =>
+                normalize(m).includes(normalize(municipalitySearch)),
+              ).map((m) => (
+                <label key={m}>
+                  <input
+                    type="checkbox"
+                    checked={municipalities.includes(m)}
+                    onChange={(e) => {
+                      const selected = e.target.checked
+                        ? [...municipalities, m]
+                        : municipalities.filter((value) => value !== m);
+                      setMunicipalities(selected);
+                      setDraft({ ...draft, municipality: selected[0] ?? "" });
+                    }}
+                  />
+                  {m}
+                </label>
+              ))}
+            </div>
+            <p className="form-help">
+              Marca uno o varios municipios. Se guarda una sola actividad y se
+              muestra su presencia en cada municipio, sin distribuir personas ni
+              otros resultados.
+            </p>
+          </fieldset>
+        )}
         <p className="form-help">
-          El mapa usa el municipio seleccionado. Puedes dejar ambas coordenadas
-          vacías o conservar una referencia municipal en formato decimal; no se
-          presenta como lugar exacto de ejecución. Las noticias no se incluyen
-          en el mapa ni en los indicadores de intervenciones.
+          El mapa usa los municipios seleccionados. Puedes dejar ambas
+          coordenadas vacías o conservar una referencia municipal en formato
+          decimal; no se presenta como lugar exacto de ejecución. Las noticias
+          no se incluyen en el mapa ni en los indicadores de intervenciones.
         </p>
         <div className="form-section-title">Resultados de la intervención</div>
         <div className="field-grid">

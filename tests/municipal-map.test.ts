@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MUNICIPALITIES, type Activity } from "../src/lib/domain";
+import {
+  MUNICIPALITIES,
+  activityMunicipalities,
+  activityMetrics,
+  validateActivity,
+  parseBulletin,
+  type Activity,
+} from "../src/lib/domain";
 import {
   cartography,
   recurrenceColor,
@@ -45,6 +52,120 @@ test("64 municipios: nombres y códigos únicos, referencias interiores a su geo
       properties.name,
     );
   }
+});
+
+const destinations = [
+  "Linares",
+  "Guaitarilla",
+  "El Peñol",
+  "La Florida",
+  "Taminango",
+  "Policarpa",
+  "Buesaco",
+  "Belén",
+  "Arboleda",
+];
+const multiInput = {
+  recordType: "Actividad",
+  title: "Actividad de prueba en varios municipios",
+  date: "2026-09-03",
+  program: "Banco de Alimentos",
+  municipality: "Pasto",
+  municipalities: destinations,
+  latitude: 1.2136,
+  longitude: -77.2811,
+  people: 90,
+  families: 9,
+  weaponsSeized: 0,
+  weaponsVoluntary: 0,
+  objective: "Atención comunitaria",
+  summary: "Resultados de prueba compartidos",
+  pisccGoal: "",
+};
+test("una actividad en nueve municipios cuenta una vez y aparece en cada municipio sin repartir personas", () => {
+  const input = validateActivity({
+    ...multiInput,
+    municipalities: [...destinations, "Linares"],
+  });
+  const a = {
+    ...input,
+    id: 901,
+    author: "prueba",
+    createdAt: "2026-09-03",
+    updatedAt: "2026-09-03",
+  };
+  const before = structuredClone(a);
+  assert.deepEqual(activityMunicipalities(a), destinations);
+  assert.equal(a.municipality, "Linares");
+  const metrics = activityMetrics([a]);
+  assert.equal(metrics.activityCount, 1);
+  assert.equal(metrics.municipalityCount, 9);
+  assert.equal(metrics.people, 90);
+  assert.equal(metrics.families, 9);
+  const summaries = summarizeMunicipalities([a]);
+  assert.equal(summaries.filter((s) => s.records.length).length, 9);
+  for (const name of destinations) {
+    const summary = summaries.find((s) => s.name === name)!;
+    assert.deepEqual(
+      summary.records.map((record) => record.id),
+      [901],
+    );
+    assert.equal(recurrenceColor(summary.records.length), "#80BEFF");
+    const filtered = activityMetrics([a], name);
+    assert.equal(filtered.activityCount, 1);
+    assert.equal(filtered.municipalityCount, 1);
+    assert.equal(filtered.people, null);
+    assert.equal(filtered.families, null);
+    assert.equal(filtered.sharedResultCount, 1);
+    assert.equal(
+      summarizeMunicipalities([a], name).filter((s) => s.records.length).length,
+      1,
+    );
+  }
+  const local = {
+    ...a,
+    id: 902,
+    municipalities: undefined,
+    municipality: "Linares",
+    people: 7,
+    families: 2,
+  };
+  assert.equal(activityMetrics([a, local]).people, 97);
+  assert.equal(activityMetrics([a, local], "Linares").people, 7);
+  assert.equal(activityMetrics([a, local], "Linares").sharedResultCount, 1);
+  assert.deepEqual(a, before);
+});
+test("municipios múltiples validados, noticias excluidas y compatibilidad con el campo único", () => {
+  for (const bad of [
+    [],
+    ["Bogotá"],
+    [""],
+    [42],
+    null,
+    "Pasto",
+    Array(65).fill("Linares"),
+  ])
+    assert.throws(() =>
+      validateActivity({ ...multiInput, municipalities: bad }),
+    );
+  const { municipalities: _members, ...legacy } = multiInput;
+  void _members;
+  const single = validateActivity(legacy);
+  assert.deepEqual(activityMunicipalities(single), ["Pasto"]);
+  assert.equal(single.municipalities, undefined);
+  const news = {
+    ...validateActivity(multiInput),
+    id: 903,
+    recordType: "Noticia",
+  } as Activity;
+  assert.equal(activityMetrics([news]).activityCount, 0);
+  assert(summarizeMunicipalities([news]).every((s) => s.records.length === 0));
+});
+test("la asistencia extrae la lista municipal explícita sin confundir el departamento con el municipio Nariño", () => {
+  const parsed = parseBulletin(
+    "Gobernación de Nariño. Ayudas destinadas a los municipios de Linares, Guaitarilla, El Peñol, La Florida, Taminango, Policarpa, Buesaco, Belén y Arboleda, teniendo en cuenta las necesidades del territorio.",
+  );
+  assert.deepEqual(parsed.municipalities, destinations);
 });
 test("recurrencia cuenta cada acción, usa el municipio declarado y conserva coordenadas", () => {
   const records = Array.from(

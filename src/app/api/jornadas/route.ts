@@ -40,9 +40,24 @@ export async function PUT(request: Request) {
     const value = await body(request);
     if (!Number.isSafeInteger(value.id) || value.id < 1)
       throw new AppError("Identificador no válido.");
-    if (!db().prepare("SELECT id FROM jornadas WHERE id=?").get(value.id))
-      throw new AppError("Jornada no encontrada.", 404);
-    saveActivities([validateActivity(value)], actor(user), user.role, value.id);
+    const row = db()
+      .prepare("SELECT payload FROM jornadas WHERE id=?")
+      .get(value.id) as { payload: string } | undefined;
+    if (!row) throw new AppError("Jornada no encontrada.", 404);
+    const previous = JSON.parse(row.payload);
+    let input = value;
+    if (
+      value.municipalities === undefined &&
+      previous.municipalities?.length > 1
+    ) {
+      if (value.municipality !== previous.municipality)
+        throw new AppError(
+          "Esta actividad tiene varios municipios. Actualiza el formulario para editar su selección completa.",
+          409,
+        );
+      input = { ...value, municipalities: previous.municipalities };
+    }
+    saveActivities([validateActivity(input)], actor(user), user.role, value.id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

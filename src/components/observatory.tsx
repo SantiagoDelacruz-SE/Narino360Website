@@ -42,6 +42,8 @@ import {
   COMPONENTS,
   RECORD_TYPES,
   recordTypeOf,
+  activityMunicipalities,
+  activityMetrics,
   assetComponent,
   type Component,
   type RecordType,
@@ -166,12 +168,16 @@ export default function Observatory({
         (a) =>
           (!program || a.program === program) &&
           (!recordType || recordTypeOf(a) === recordType) &&
-          (!municipality || a.municipality === municipality) &&
+          (!municipality || activityMunicipalities(a).includes(municipality)) &&
           (!since || a.date >= since) &&
           (!until || a.date <= until) &&
           (!search ||
             normalize(
-              a.title + " " + a.summary + " " + a.municipality,
+              a.title +
+                " " +
+                a.summary +
+                " " +
+                activityMunicipalities(a).join(" "),
             ).includes(normalize(search))),
       ),
     [activities, program, recordType, municipality, since, until, search],
@@ -194,18 +200,19 @@ export default function Observatory({
     [filtered],
   );
   const totals = useMemo(
-    () =>
-      territorial.reduce(
-        (t, a) => ({
-          people: t.people + (a.people ?? 0),
-          families: t.families + a.families,
-          weapons: t.weapons + a.weaponsSeized + a.weaponsVoluntary,
-        }),
-        { people: 0, families: 0, weapons: 0 },
-      ),
-    [territorial],
+    () => activityMetrics(territorial, municipality),
+    [territorial, municipality],
   );
-  const covered = new Set(territorial.map((a) => a.municipality)).size;
+  const covered = totals.municipalityCount;
+  const resultValue = (value: number | null) =>
+    value === null && totals.sharedResultCount
+      ? "Sin desglose municipal"
+      : number(value);
+  const sharedNote = totals.sharedResultCount
+    ? " · " +
+      totals.sharedResultCount +
+      " actividades compartidas sin desglose municipal"
+    : "";
   const title =
     tab === "auditoria"
       ? "Auditoría de accesos"
@@ -266,7 +273,11 @@ export default function Observatory({
         ID: a.id,
         Fecha: a.date,
         Titulo: a.title,
-        Municipio: a.municipality,
+        Municipio: activityMunicipalities(a).join("; "),
+        Alcance_resultados:
+          activityMunicipalities(a).length > 1
+            ? "Total de la actividad; sin desglose municipal"
+            : "Municipal",
         Componente: a.program,
         Tipo: recordTypeOf(a),
         Latitud: a.latitude,
@@ -654,32 +665,32 @@ export default function Observatory({
                 <Kpi
                   icon={Users}
                   label="Personas beneficiadas"
-                  value={
-                    territorial.length > 0 &&
-                    territorial.every((a) => a.people === null)
-                      ? "Sin desagregar"
-                      : number(totals.people)
-                  }
+                  value={resultValue(totals.people)}
                   note={
                     "Cifras por jornada · " +
-                    territorial.filter((a) => a.people === null).length +
+                    totals.unknownPeopleCount +
                     " sin desagregar · Meta: " +
-                    number(REFERENCES.people)
+                    number(REFERENCES.people) +
+                    sharedNote
                   }
                   color="amber"
                 />
                 <Kpi
                   icon={Building2}
                   label="Familias beneficiadas"
-                  value={number(totals.families)}
-                  note={"Meta de referencia: " + number(REFERENCES.families)}
+                  value={resultValue(totals.families)}
+                  note={
+                    "Meta de referencia: " +
+                    number(REFERENCES.families) +
+                    sharedNote
+                  }
                   color="purple"
                 />
                 <Kpi
                   icon={ShieldCheck}
                   label="Armas registradas"
-                  value={number(totals.weapons)}
-                  note="Incautadas + entregadas · Ref. 194"
+                  value={resultValue(totals.weapons)}
+                  note={"Incautadas + entregadas · Ref. 194" + sharedNote}
                   color="rose"
                 />
               </div>
@@ -693,6 +704,7 @@ export default function Observatory({
               <div className="territory-grid">
                 <MapPanel
                   activities={territorial}
+                  municipality={municipality}
                   onOpen={(activity) => setModal({ type: "detail", activity })}
                 />
                 <aside className="panel coverage-panel">
@@ -787,7 +799,10 @@ export default function Observatory({
                             new Set(
                               rows
                                 .filter((a) => recordTypeOf(a) !== "Noticia")
-                                .map((a) => a.municipality),
+                                .flatMap(activityMunicipalities)
+                                .filter(
+                                  (m) => !municipality || m === municipality,
+                                ),
                             ).size
                           }{" "}
                           municipios
@@ -1259,9 +1274,7 @@ function Kpi({
       </div>
       <p>{label}</p>
       <strong
-        className={
-          "kpi-value" + (value === "Sin desagregar" ? " kpi-text" : "")
-        }
+        className={"kpi-value" + (value.startsWith("Sin ") ? " kpi-text" : "")}
       >
         {value}
         <small>{suffix}</small>
@@ -1301,7 +1314,7 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
       <div className="detail-meta">
         <span>
           <MapPin size={15} />
-          {a.municipality}
+          {activityMunicipalities(a).join(", ")}
         </span>
         <span>
           <CalendarDays size={15} />
@@ -1325,6 +1338,13 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
           <h3>Meta PISCC</h3>
           <p>{a.pisccGoal}</p>
         </>
+      )}
+      {activityMunicipalities(a).length > 1 && (
+        <p className="notice activity-result-scope">
+          Los resultados siguientes corresponden al total de esta actividad. No
+          están distribuidos entre sus {activityMunicipalities(a).length}{" "}
+          municipios.
+        </p>
       )}
       <div className="detail-stats">
         {[
@@ -1890,7 +1910,7 @@ function ActivityTable({
                     : a.pisccGoal || "Sin meta PISCC asociada"}
                 </small>
               </td>
-              <td>{a.municipality}</td>
+              <td>{activityMunicipalities(a).join(", ")}</td>
               <td>
                 <span
                   className={
@@ -1900,7 +1920,14 @@ function ActivityTable({
                   {a.program}
                 </span>
               </td>
-              <td>{number(a.people)}</td>
+              <td>
+                {number(a.people)}
+                {activityMunicipalities(a).length > 1 && (
+                  <small className="form-help">
+                    Total compartido · sin desglose municipal
+                  </small>
+                )}
+              </td>
               {!compact && <td>{formatDate(a.date)}</td>}
               <td>
                 {canEdit ? (

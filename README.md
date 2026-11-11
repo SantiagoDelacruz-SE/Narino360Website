@@ -76,6 +76,9 @@ anteriores y nuevos.
   Los 64 límites municipales y su procedencia están documentados en
   [Cartografía](docs/cartografia/README.md).
 
+- Actividades de Banco de Alimentos con uno o varios municipios. Cada actividad
+  se cuenta una vez en el total general y aparece en cada destino del mapa. Los
+  resultados compartidos no se distribuyen al aplicar un filtro municipal.
 - Entregas e impactos consolidados: informes con líneas, período pendiente o
   confirmado y PDF privado; actas con varios destinos, productos y vínculos a
   jornadas existentes. Los totales de informes se muestran aparte, sin repartir

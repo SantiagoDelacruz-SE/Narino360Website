@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   COMPONENTS,
+  activityMunicipalities,
   assetComponent,
   recordTypeOf,
   type Activity,
@@ -340,7 +341,9 @@ export default function ComponentsHub({
                       </span>
                     </div>
                     <h3>{a.title}</h3>
-                    <p className="muted">{a.municipality}</p>
+                    <p className="muted">
+                      {activityMunicipalities(a).join(", ")}
+                    </p>
                     <p className="component-record-excerpt">{a.summary}</p>
                     <button className="text-link" onClick={() => onOpen(a)}>
                       Ver detalle <ArrowRight size={15} />

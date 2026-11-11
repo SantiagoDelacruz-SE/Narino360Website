@@ -4034,3 +4034,57 @@ td small {
   flex-shrink: 0;
   margin-top: 2px;
 }
+
+.activity-municipalities {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.activity-municipalities legend {
+  font-weight: 700;
+  font-size: 12px;
+  padding: 0 6px;
+}
+.activity-selected-municipalities {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.activity-municipalities > div {
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+.activity-municipalities label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.activity-municipalities input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  flex-shrink: 0;
+}
+.activity-result-scope {
+  display: block;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.map-record > span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .activity-municipalities > div {
+    grid-template-columns: 1fr;
+  }
+}

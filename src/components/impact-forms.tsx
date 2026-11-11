@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import {
   MUNICIPALITIES,
+  activityMunicipalities,
   normalize,
   recordTypeOf,
   type Activity,
@@ -403,9 +404,9 @@ export function DeliveryForm({
     (a) =>
       recordTypeOf(a) !== "Noticia" &&
       (!activitySearch ||
-        normalize(a.title + " " + a.municipality + " " + a.id).includes(
-          normalize(activitySearch),
-        ) ||
+        normalize(
+          a.title + " " + activityMunicipalities(a).join(" ") + " " + a.id,
+        ).includes(normalize(activitySearch)) ||
         draft.activityIds.includes(a.id)),
   );
   const visibleOptions = options.slice(0, 100);
@@ -686,7 +687,8 @@ export function DeliveryForm({
                 }
               />
               <span>
-                #{a.id} · {a.title} · {a.municipality} · {a.program}
+                #{a.id} · {a.title} · {activityMunicipalities(a).join(", ")} ·{" "}
+                {a.program}
               </span>
             </label>
           ))}

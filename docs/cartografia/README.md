@@ -38,3 +38,8 @@ No se trasladan ni modifican los registros existentes.
 - Ambas vistas usan el municipio declarado y los filtros vigentes. Las
   coordenadas históricas se conservan como referencias municipales opcionales;
   no se representan como sitios exactos ni se separan visualmente.
+
+Una misma actividad puede estar asociada a varios municipios. Cada municipio
+recibe una presencia de esa actividad, mientras el contador general y su listado
+mantienen un único registro. El filtro municipal limita la cobertura visible sin
+repartir ni repetir los resultados agregados de la actividad.

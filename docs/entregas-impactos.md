@@ -70,3 +70,35 @@ esos datos se hace desde la sesión autenticada de la aplicación.
 
 No se solicita la carga de archivos de actas individuales. El PDF del informe
 general es opcional; las entregas y sus vínculos se pueden registrar sin él.
+
+## Una actividad con varios municipios
+
+En el formulario de actividades de Banco de Alimentos, **Municipios de la
+actividad** permite marcar uno o varios destinos y buscarlos por nombre. La
+asistencia desde boletín también reconoce listas explícitas del tipo
+«municipios de Linares, Guaitarilla…». Las coordenadas siguen siendo opcionales.
+
+Una actividad compartida conserva un solo identificador y una sola fecha, fuente
+y cifra de resultados. Aparece una vez en cada municipio seleccionado en ambos
+mapas, pero una sola vez en el contador general y en la exportación CSV. Por ello,
+los conteos de municipios no se suman para obtener el número de actividades únicas.
+
+Al filtrar un municipio se incluyen las actividades que lo tengan entre sus
+destinos, aunque no sea el primero. El mapa se limita a ese municipio. Los totales
+compartidos de personas, familias y armas no se atribuyen al municipio filtrado:
+se indica **Sin desglose municipal** si no hay cifras de actividades exclusivamente
+municipales. Cuando hay cifras locales, se muestran como parciales y se informa
+cuántas actividades compartidas carecen de desglose. Al quitar el filtro, el total
+de cada actividad se cuenta una vez.
+
+La importación de jornadas acepta `municipalities` como una lista de 1 a 64 nombres
+del catálogo. Repetir un nombre no duplica la presencia. El campo histórico
+`municipality` sigue siendo válido para registros de un solo municipio y, en
+registros nuevos con lista, conserva el primer nombre por compatibilidad. No es
+un municipio principal ni limita la cobertura de la actividad. No hay una
+reescritura de los registros históricos.
+
+Las ediciones de clientes antiguos que omitan la lista conservan todos los destinos
+si mantienen la referencia individual anterior. Cambiar ubicaciones de una
+actividad compartida exige enviar la lista completa, evitando perder municipios
+por usar un formulario desactualizado.

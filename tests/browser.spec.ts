@@ -1705,7 +1705,7 @@ test("Informes y entregas: 49 actas sin duplicar eventos, personas sin desglose,
     .getByLabel("Título del registro", { exact: true })
     .fill("Jornada sintética sin cifra individual");
   await dialog.getByLabel("Fecha", { exact: true }).fill("2026-11-11");
-  await dialog.getByLabel("Municipio", { exact: true }).selectOption("Pasto");
+  await dialog.getByLabel("Pasto", { exact: true }).check();
   await expect(
     dialog.getByLabel("Personas beneficiadas", { exact: true }),
   ).toHaveValue("");
@@ -1956,5 +1956,229 @@ test("Informes y entregas: 49 actas sin duplicar eventos, personas sin desglose,
   } finally {
     await context.close();
   }
+  expect(errors).toEqual([]);
+});
+
+test("Una actividad de Banco de Alimentos cubre nueve municipios, cuenta una sola vez y conserva los totales al filtrar y editar", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120000);
+  page.setDefaultTimeout(15000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const tile = await sharp({
+    create: { width: 256, height: 256, channels: 3, background: "#eef5f1" },
+  })
+    .png()
+    .toBuffer();
+  await page.route("https://tile.openstreetmap.org/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/png",
+      headers: { "access-control-allow-origin": "*" },
+      body: tile,
+    }),
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const read = async () =>
+    (await (await page.request.get("/api/jornadas")).json()).activities;
+  const before = (await read()).length;
+  const title = "Actividad sintética de cobertura en nueve municipios";
+  const destinations = [
+    "Linares",
+    "Guaitarilla",
+    "El Peñol",
+    "La Florida",
+    "Taminango",
+    "Policarpa",
+    "Buesaco",
+    "Belén",
+    "Arboleda",
+  ];
+  await page.goto("/#componentes/banco-de-alimentos");
+  await page
+    .getByRole("button", { name: "Registrar actividad", exact: true })
+    .click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Título del registro", { exact: true }).fill(title);
+  await dialog.getByLabel("Fecha", { exact: true }).fill("2026-09-03");
+  for (const municipality of destinations) {
+    await dialog
+      .getByLabel("Buscar municipio de la actividad", { exact: true })
+      .fill(municipality);
+    await dialog.getByLabel(municipality, { exact: true }).check();
+  }
+  await dialog
+    .getByLabel("Buscar municipio de la actividad", { exact: true })
+    .fill("");
+  await expect(dialog.locator(".activity-municipalities legend")).toContainText(
+    "9 seleccionados",
+  );
+  await dialog.getByLabel("Personas beneficiadas", { exact: true }).fill("90");
+  await dialog.getByLabel("Familias beneficiadas", { exact: true }).fill("9");
+  await dialog
+    .getByLabel("Objetivo", { exact: true })
+    .fill("Registrar una sola intervención con varios municipios de destino.");
+  await dialog
+    .getByLabel("Resumen operativo y resultados", { exact: true })
+    .fill(
+      "Datos sintéticos para comprobar cobertura compartida sin multiplicar beneficiarios.",
+    );
+  await dialog
+    .getByRole("button", { name: "Registrar jornada", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  let records = await read();
+  expect(records).toHaveLength(before + 1);
+  const record = records.find((a: { title: string }) => a.title === title);
+  expect(record.municipalities).toEqual(destinations);
+  expect(record.people).toBe(90);
+  await page
+    .getByRole("button", { name: "Vista general", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Componente", exact: true })
+    .selectOption("Banco de Alimentos");
+  await page.getByLabel("Fecha inicial", { exact: true }).fill("2026-09-03");
+  await page.getByLabel("Fecha final", { exact: true }).fill("2026-09-03");
+  const kpi = (label: string) =>
+    page.locator(".kpi-card").filter({ hasText: label }).locator(".kpi-value");
+  await expect(kpi("Actividades ejecutadas")).toHaveText("1");
+  await expect(kpi("Municipios con registros")).toContainText("9");
+  await expect(kpi("Personas beneficiadas")).toHaveText("90");
+  await expect(kpi("Familias beneficiadas")).toHaveText("9");
+  await expect(page.locator(".map-record-count")).toContainText(
+    "1 acción · 9 de 64 municipios",
+  );
+  await expect(page.locator(".municipal-marker")).toHaveCount(9);
+  await expect(page.locator(".map-record")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Mapa de calor", exact: true })
+    .click();
+  for (const name of destinations) {
+    await expect(
+      page.locator('path[data-municipality="' + name + '"]'),
+    ).toHaveAttribute("data-action-count", "1");
+    await expect(
+      page.locator('path[data-municipality="' + name + '"]'),
+    ).toHaveAttribute("fill", "#80BEFF");
+  }
+  await expect(page.locator('path[data-municipality="Pasto"]')).toHaveAttribute(
+    "data-action-count",
+    "0",
+  );
+  await page
+    .locator(".map-panel")
+    .screenshot({
+      path: testInfo.outputPath("una-actividad-nueve-municipios.png"),
+      animations: "disabled",
+    });
+  await page
+    .getByRole("combobox", { name: "Municipio", exact: true })
+    .selectOption("Belén");
+  await expect(kpi("Actividades ejecutadas")).toHaveText("1");
+  await expect(kpi("Personas beneficiadas")).toHaveText(
+    "Sin desglose municipal",
+  );
+  await expect(kpi("Familias beneficiadas")).toHaveText(
+    "Sin desglose municipal",
+  );
+  await expect(page.locator(".map-record-count")).toContainText(
+    "1 acción · 1 de 64 municipios",
+  );
+  await expect(page.locator('path[data-municipality="Belén"]')).toHaveAttribute(
+    "data-action-count",
+    "1",
+  );
+  await expect(
+    page.locator('path[data-municipality="Linares"]'),
+  ).toHaveAttribute("data-action-count", "0");
+  await expect(
+    page.getByLabel("Explorar municipio", { exact: true }),
+  ).toHaveValue("Belén");
+  await expect(page.locator(".map-record")).toHaveCount(1);
+  await page
+    .getByRole("combobox", { name: "Municipio", exact: true })
+    .selectOption("El Tambo");
+  await expect(kpi("Actividades ejecutadas")).toHaveText("0");
+  await expect(page.locator(".map-record")).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Municipio", exact: true })
+    .selectOption("");
+  await expect(kpi("Personas beneficiadas")).toHaveText("90");
+  await page.locator(".map-record").click();
+  dialog = page.getByRole("dialog");
+  for (const name of destinations) await expect(dialog).toContainText(name);
+  await expect(dialog).toContainText(
+    "No están distribuidos entre sus 9 municipios",
+  );
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Jornadas y actividades", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Editar " + title, exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(
+    dialog.locator('.activity-municipalities input[type="checkbox"]:checked'),
+  ).toHaveCount(9);
+  await dialog.getByLabel("Arboleda", { exact: true }).uncheck();
+  await dialog
+    .getByLabel("Buscar municipio de la actividad", { exact: true })
+    .fill("Tumaco");
+  await dialog.getByLabel("Tumaco", { exact: true }).check();
+  await dialog
+    .getByRole("button", { name: "Guardar cambios", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  records = await read();
+  expect(records).toHaveLength(before + 1);
+  const updated = records.find((a: { id: number }) => a.id === record.id);
+  expect(updated.municipalities).toHaveLength(9);
+  expect(updated.municipalities).toContain("Tumaco");
+  expect(updated.municipalities).not.toContain("Arboleda");
+  expect(updated.people).toBe(90);
+  const downloadPromise = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Exportar datos", exact: true })
+    .click();
+  const download = await downloadPromise;
+  const { readFile } = await import("node:fs/promises");
+  const csv = await readFile((await download.path())!, "utf8");
+  expect(csv.trim().split("\r\n")).toHaveLength(2);
+  expect(csv).toContain("Tumaco");
+  expect(csv).not.toContain("Arboleda");
+  expect(csv).toContain("sin desglose municipal");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: "Editar " + title, exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(
+    dialog.locator('.activity-municipalities input[type="checkbox"]:checked'),
+  ).toHaveCount(9);
+  await dialog.screenshot({
+    path: testInfo.outputPath("seleccion-municipios-movil.png"),
+    animations: "disabled",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
   expect(errors).toEqual([]);
 });

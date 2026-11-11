@@ -1,6 +1,7 @@
 import {
   COMPONENTS,
   recordTypeOf,
+  activityMunicipalities,
   type Activity,
   type Component,
 } from "./domain";
@@ -35,11 +36,16 @@ export type MunicipalSummary = {
 
 // All geographic views use the declared municipality. Legacy coordinates are
 // municipal references, not execution sites; never jitter or rewrite them.
-export function summarizeMunicipalities(activities: readonly Activity[]) {
+export function summarizeMunicipalities(
+  activities: readonly Activity[],
+  municipality = "",
+) {
   return cartography.features.map(({ properties }): MunicipalSummary => {
     const records = activities.filter(
       (a) =>
-        a.municipality === properties.name && recordTypeOf(a) !== "Noticia",
+        (!municipality || properties.name === municipality) &&
+        activityMunicipalities(a).includes(properties.name) &&
+        recordTypeOf(a) !== "Noticia",
     );
     return {
       ...properties,

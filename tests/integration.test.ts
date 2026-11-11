@@ -1688,3 +1688,115 @@ test("Un fallo dentro de la importación revierte informe y entregas, sin dejar 
     database.exec("DROP TRIGGER rechazar_acta_prueba");
   }
 });
+
+test("Una actividad con varios municipios se persiste una sola vez; la edición conserva el ID y los clientes antiguos no pierden destinos", async () => {
+  const before = db.listActivities();
+  const destinations = [
+    "Linares",
+    "Guaitarilla",
+    "El Peñol",
+    "La Florida",
+    "Taminango",
+    "Policarpa",
+    "Buesaco",
+    "Belén",
+    "Arboleda",
+  ];
+  const input = {
+    ...activity,
+    title: "Actividad sintética con nueve municipios",
+    program: "Banco de Alimentos",
+    municipality: "Pasto",
+    municipalities: [...destinations, "Linares"],
+    people: 90,
+    families: 9,
+  };
+  const saved = await request("/api/jornadas", "POST", input, admin);
+  assert.equal(saved.status, 201, await saved.clone().text());
+  assert.equal((await saved.json()).count, 1);
+  const record = db.listActivities().find((a) => a.title === input.title)!;
+  assert.equal(db.listActivities().length, before.length + 1);
+  assert.deepEqual(record.municipalities, destinations);
+  assert.equal(record.municipality, "Linares");
+  assert.equal(record.people, 90);
+  assert.equal(record.latitude, activity.latitude);
+  const read = (
+    await (await request("/api/jornadas", "GET", undefined, admin)).json()
+  ).activities.find((a: { id: number }) => a.id === record.id);
+  assert.deepEqual(read.municipalities, destinations);
+  const { municipalities: _members, ...legacy } = record;
+  void _members;
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "PUT",
+        { ...legacy, title: input.title + " editada" },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.deepEqual(
+    db.listActivities().find((a) => a.id === record.id)!.municipalities,
+    destinations,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "PUT",
+        { ...legacy, municipality: "Tumaco" },
+        admin,
+      )
+    ).status,
+    409,
+  );
+  const value = { ...record, municipalities: ["Belén", "Arboleda"] };
+  assert.equal(
+    (await request("/api/jornadas", "PUT", value, admin)).status,
+    200,
+  );
+  const updated = db.listActivities().find((a) => a.id === record.id)!;
+  assert.deepEqual(updated.municipalities, ["Belén", "Arboleda"]);
+  assert.equal(updated.municipality, "Belén");
+  assert.equal(updated.people, 90);
+  assert.equal(db.listActivities().length, before.length + 1);
+  for (const invalid of [[], ["Bogotá"], null]) {
+    assert.equal(
+      (
+        await request(
+          "/api/jornadas",
+          "PUT",
+          { ...updated, municipalities: invalid },
+          admin,
+        )
+      ).status,
+      400,
+    );
+    assert.deepEqual(
+      db.listActivities().find((a) => a.id === record.id),
+      updated,
+    );
+  }
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "PUT",
+        { ...updated, municipalities: ["Belén"] },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.deepEqual(
+    db.listActivities().find((a) => a.id === record.id)!.municipalities,
+    ["Belén"],
+  );
+  assert.equal(
+    (await request("/api/jornadas", "DELETE", { id: record.id }, admin)).status,
+    200,
+  );
+  assert.deepEqual(db.listActivities(), before);
+});

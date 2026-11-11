@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import {
   MUNICIPALITIES,
+  activityMunicipalities,
   COMPONENTS,
   type Component,
   PUBLICATION_TYPES,
@@ -255,7 +256,7 @@ export default function MediaUpload({
                 <option value="">Sin jornada asociada</option>
                 {activities.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.title} · {a.municipality}
+                    {a.title} · {activityMunicipalities(a).join(", ")}
                   </option>
                 ))}
               </select>
