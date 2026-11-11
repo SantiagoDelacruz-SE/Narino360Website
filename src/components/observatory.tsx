@@ -60,6 +60,7 @@ import ActivityForm from "./activity-form";
 import MediaUpload from "./media-upload";
 import Presentation from "./presentation";
 import ComponentsHub from "./components-hub";
+import ImpactOverview from "./impact-overview";
 import PdfPreview from "./pdf-preview";
 import MapPanel from "./municipal-map-panel";
 const navigation = [
@@ -117,6 +118,7 @@ export default function Observatory({
     [until, setUntil] = useState("");
   const [recordType, setRecordType] = useState("");
   const [component, setComponent] = useState<Component | null>(null);
+  const [showImpacts, setShowImpacts] = useState(false);
   const [columns, setColumns] = useState(3),
     [modal, setModal] = useState<ModalState>(null),
     [toast, setToast] = useState(""),
@@ -125,7 +127,10 @@ export default function Observatory({
   const canEdit = canEditContent(user.role);
   useEffect(() => {
     const update = () => {
-      const [route, selected] = window.location.hash.slice(1).split("/");
+      const [route, selected, section] = window.location.hash
+        .slice(1)
+        .split("/");
+      setShowImpacts(section === "impactos");
       let value = route;
       if (value === "componentes")
         setComponent(
@@ -192,7 +197,7 @@ export default function Observatory({
     () =>
       territorial.reduce(
         (t, a) => ({
-          people: t.people + a.people,
+          people: t.people + (a.people ?? 0),
           families: t.families + a.families,
           weapons: t.weapons + a.weaponsSeized + a.weaponsVoluntary,
         }),
@@ -214,7 +219,8 @@ export default function Observatory({
     setMenu(false);
     window.history.pushState(null, "", "#" + id);
   }
-  function selectComponent(value: Component | null) {
+  function selectComponent(value: Component | null, impacts = false) {
+    setShowImpacts(impacts);
     setComponent(value);
     setTab("componentes");
     setMenu(false);
@@ -222,7 +228,8 @@ export default function Observatory({
       null,
       "",
       "#componentes" +
-        (value ? "/" + normalize(value).replace(/\s+/g, "-") : ""),
+        (value ? "/" + normalize(value).replace(/\s+/g, "-") : "") +
+        (impacts ? "/impactos" : ""),
     );
   }
   async function refresh() {
@@ -264,7 +271,7 @@ export default function Observatory({
         Tipo: recordTypeOf(a),
         Latitud: a.latitude,
         Longitud: a.longitude,
-        Personas: a.people,
+        Personas: a.people ?? "Sin desagregar",
         Familias: a.families,
         Armas_incautadas: a.weaponsSeized,
         Armas_voluntarias: a.weaponsVoluntary,
@@ -647,8 +654,18 @@ export default function Observatory({
                 <Kpi
                   icon={Users}
                   label="Personas beneficiadas"
-                  value={number(totals.people)}
-                  note={"Meta de referencia: " + number(REFERENCES.people)}
+                  value={
+                    territorial.length > 0 &&
+                    territorial.every((a) => a.people === null)
+                      ? "Sin desagregar"
+                      : number(totals.people)
+                  }
+                  note={
+                    "Cifras por jornada · " +
+                    territorial.filter((a) => a.people === null).length +
+                    " sin desagregar · Meta: " +
+                    number(REFERENCES.people)
+                  }
                   color="amber"
                 />
                 <Kpi
@@ -666,6 +683,13 @@ export default function Observatory({
                   color="rose"
                 />
               </div>
+              <ImpactOverview
+                component={program}
+                limited={Boolean(
+                  municipality || since || until || recordType || search,
+                )}
+                onExplore={(name) => selectComponent(name, true)}
+              />
               <div className="territory-grid">
                 <MapPanel
                   activities={territorial}
@@ -1022,12 +1046,14 @@ export default function Observatory({
           )}
           {tab === "componentes" && (
             <ComponentsHub
-              key={component ?? "home"}
+              key={(component ?? "home") + (showImpacts ? "-impactos" : "")}
               component={component}
-              onSelect={selectComponent}
+              onSelect={(name) => selectComponent(name)}
               activities={activities}
               assets={assets}
               canEdit={canEdit}
+              isAdmin={user.role === "Administrador"}
+              initialImpacts={showImpacts}
               onCreate={(type, name) =>
                 setModal({
                   type: "activity",
@@ -1232,7 +1258,11 @@ function Kpi({
         </span>
       </div>
       <p>{label}</p>
-      <strong className="kpi-value">
+      <strong
+        className={
+          "kpi-value" + (value === "Sin desagregar" ? " kpi-text" : "")
+        }
+      >
         {value}
         <small>{suffix}</small>
       </strong>
@@ -1280,7 +1310,10 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
         <span>
           {a.latitude === null || a.longitude === null
             ? "Sin coordenadas registradas"
-            : "Referencia municipal guardada: " + a.latitude + ", " + a.longitude}
+            : "Referencia municipal guardada: " +
+              a.latitude +
+              ", " +
+              a.longitude}
         </span>
       </div>
       <h3>Objetivo</h3>
@@ -1301,7 +1334,7 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
           ["Armas entregadas", a.weaponsVoluntary],
         ].map(([label, value]) => (
           <div key={label}>
-            <strong>{number(Number(value))}</strong>
+            <strong>{number(value === null ? null : Number(value))}</strong>
             <span>{label}</span>
           </div>
         ))}

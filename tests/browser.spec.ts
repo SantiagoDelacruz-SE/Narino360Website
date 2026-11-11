@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import sharp from "sharp";
 import { pdfFixture } from "./pdf-fixture";
+import { impactFixture } from "./impact-fixture";
 test("Funcionario registra jornada, carga evidencias y usa el carrusel", async ({
   page,
 }, testInfo) => {
@@ -1668,5 +1669,292 @@ test("acciones y recurrencia municipal conservan los 36 registros sin inventar l
     animations: "disabled",
   });
   expect(await readRecords()).toEqual(before);
+  expect(errors).toEqual([]);
+});
+
+test("Informes y entregas: 49 actas sin duplicar eventos, personas sin desglose, PDF y lectura móvil", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(120000);
+  page.setDefaultTimeout(15000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const origin = new URL(page.url()).origin;
+  const before = (await (await page.request.get("/api/jornadas")).json())
+    .activities.length;
+  await page.goto("/#componentes/banco-de-alimentos");
+  await page
+    .getByRole("button", { name: "Registrar actividad", exact: true })
+    .click();
+  let dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Título del registro", { exact: true })
+    .fill("Jornada sintética sin cifra individual");
+  await dialog.getByLabel("Fecha", { exact: true }).fill("2026-11-11");
+  await dialog.getByLabel("Municipio", { exact: true }).selectOption("Pasto");
+  await expect(
+    dialog.getByLabel("Personas beneficiadas", { exact: true }),
+  ).toHaveValue("");
+  await dialog
+    .getByLabel("Objetivo", { exact: true })
+    .fill("Verificar trazabilidad de entregas sin distribuir el impacto.");
+  await dialog
+    .getByLabel("Resumen operativo y resultados", { exact: true })
+    .fill("Registro de prueba con personas sin desagregar.");
+  await dialog
+    .getByRole("button", { name: "Registrar jornada", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  const journey = (
+    await (await page.request.get("/api/jornadas")).json()
+  ).activities.find(
+    (a: { title: string }) =>
+      a.title === "Jornada sintética sin cifra individual",
+  );
+  expect(journey.people).toBeNull();
+  const secondCreated = await page.request.post("/api/jornadas", {
+    headers: { origin },
+    data: {
+      ...journey,
+      title: "Segunda jornada de la misma acta",
+      program: "Cultivos para la Paz",
+    },
+  });
+  expect(secondCreated.status()).toBe(201);
+  const secondJourney = (
+    await (await page.request.get("/api/jornadas")).json()
+  ).activities.find(
+    (a: { title: string }) => a.title === "Segunda jornada de la misma acta",
+  );
+
+  await page
+    .getByRole("tab", { name: "Entregas e impactos", exact: true })
+    .click();
+  const bundle = impactFixture("ui-impacto-" + Date.now());
+  const file = {
+    name: "informe-sintetico.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(bundle)),
+  };
+  await page
+    .getByLabel("Importar informe JSON", { exact: true })
+    .setInputFiles(file);
+  dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("49 referencias de entregas");
+  await expect(
+    dialog.getByLabel("Estado del período", { exact: true }),
+  ).toHaveValue("Pendiente");
+  await dialog
+    .getByLabel("Adjuntar informe general PDF (opcional)", { exact: true })
+    .setInputFiles({
+      name: "soporte-de-informe.pdf",
+      mimeType: "application/pdf",
+      buffer: pdfFixture(),
+    });
+  await dialog
+    .getByRole("button", {
+      name: "Guardar informe e importar entregas",
+      exact: true,
+    })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator(".delivery-card")).toHaveCount(49);
+  await expect(page.locator(".impact-scope")).toContainText(
+    "1.000 personas de impacto reportado",
+  );
+  await expect(page.locator(".impact-scope")).toContainText(
+    "Período pendiente de aclarar",
+  );
+  expect(
+    (await (await page.request.get("/api/jornadas")).json()).activities,
+  ).toHaveLength(before + 2);
+  await page
+    .getByLabel("Importar informe JSON", { exact: true })
+    .setInputFiles(file);
+  await expect(
+    page.locator(".impact-workspace").getByRole("alert"),
+  ).toContainText("ya está registrado");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Nueva entrega", exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Nombre de la entrega", { exact: true })
+    .fill("Entrega sin acta ni archivos");
+  await expect(
+    dialog.getByLabel("Número de acta (opcional)", { exact: true }),
+  ).not.toHaveAttribute("required", "");
+  await expect(dialog.locator('input[type="file"]')).toHaveCount(0);
+  await dialog
+    .getByRole("button", { name: "Guardar entrega", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator(".delivery-card")).toHaveCount(50);
+  await page
+    .getByRole("button", { name: "Editar entrega 001", exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByLabel("Fecha literal del documento", { exact: true }),
+  ).toHaveValue("13 de agosto de 20206");
+  await dialog
+    .getByLabel("Añadir fecha confirmada", { exact: true })
+    .fill("2026-05-20");
+  await dialog
+    .getByRole("button", { name: "Añadir fecha", exact: true })
+    .click();
+  await dialog
+    .getByLabel("Buscar municipio de destino", { exact: true })
+    .fill("Pasto");
+  await dialog.getByLabel("Pasto", { exact: true }).check();
+  await dialog
+    .getByLabel("Buscar municipio de destino", { exact: true })
+    .fill("Tumaco");
+  await dialog.getByLabel("Tumaco", { exact: true }).check();
+  await dialog
+    .getByRole("button", { name: "Añadir producto", exact: true })
+    .click();
+  await dialog.getByLabel("Producto", { exact: true }).fill("Arroz");
+  await dialog.getByLabel("Cantidad", { exact: true }).fill("2");
+  await dialog.getByLabel("Unidad", { exact: true }).fill("bultos");
+  await dialog
+    .getByLabel("Vincular jornada " + journey.id, { exact: true })
+    .check();
+  await dialog
+    .getByLabel("Vincular jornada " + secondJourney.id, { exact: true })
+    .check();
+  await dialog
+    .getByLabel("Estado de revisión", { exact: true })
+    .selectOption("Revisada");
+  await dialog
+    .getByRole("button", { name: "Guardar entrega", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  const first = page
+    .locator(".delivery-card")
+    .filter({ has: page.getByText("Acta 001 · Revisada", { exact: true }) });
+  await expect(first).toContainText("Pasto · Tumaco");
+  await expect(first).toContainText("Arroz: 2 bultos");
+  await expect(first).toContainText(
+    "Sin desagregar · impacto disponible por línea",
+  );
+  await first
+    .getByRole("button", { name: /Ver jornada vinculada/ })
+    .first()
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".detail-stats")).toContainText("Sin desagregar");
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Previsualizar soporte PDF", exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("status")).toHaveText("Página 1 de 2");
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page.getByLabel("Buscar entrega", { exact: true }).fill("001");
+  await expect(page.locator(".delivery-card")).toHaveCount(1);
+  await page.locator(".impact-workspace").screenshot({
+    path: testInfo.outputPath("informe-entregas.png"),
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", { name: "Vista general", exact: true })
+    .click();
+  await expect(page.locator(".impact-overview")).toContainText(
+    "1.000 personas reportadas",
+  );
+  await page
+    .getByRole("combobox", { name: "Municipio", exact: true })
+    .selectOption("Pasto");
+  await expect(page.locator(".impact-overview")).toContainText(
+    "Sin desglose para estos filtros",
+  );
+  await expect(
+    page.locator(".impact-overview .impact-value"),
+  ).not.toContainText("1.000");
+  await page
+    .getByRole("button", { name: "Consultar informes", exact: true })
+    .click();
+  await expect(
+    page.getByRole("tab", { name: "Entregas e impactos", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.reload();
+  await expect(
+    page.getByRole("tab", { name: "Entregas e impactos", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  const created = await page.request.post("/api/usuarios", {
+    headers: { origin },
+    data: {
+      username: "impact-lectura",
+      name: "Consulta de informes",
+      role: "Consulta",
+      password: "Clave-Prueba-Impactos-2026",
+    },
+  });
+  expect(created.status()).toBe(201);
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    const reader = await context.newPage();
+    reader.on("pageerror", (e) => errors.push(e.message));
+    await reader.goto("/acceso");
+    await reader.getByLabel("Usuario", { exact: true }).fill("impact-lectura");
+    await reader
+      .getByLabel("Contraseña", { exact: true })
+      .fill("Clave-Prueba-Impactos-2026");
+    await reader
+      .getByRole("button", { name: "Ingresar al observatorio" })
+      .click();
+    await expect(
+      reader.getByRole("heading", {
+        name: "Observatorio de Paz, Seguridad y Convivencia",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await reader.goto("/#componentes/banco-de-alimentos/impactos");
+    await reader.getByRole("button", { name: /Abrir informe/ }).click();
+    await expect(reader.locator(".delivery-card")).toHaveCount(50);
+    await expect(
+      reader.getByRole("button", { name: "Nuevo informe", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      reader.getByLabel("Importar informe JSON", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      reader.getByRole("button", { name: /Editar entrega/ }),
+    ).toHaveCount(0);
+    await expect(
+      reader.getByRole("button", { name: /Eliminar entrega/ }),
+    ).toHaveCount(0);
+    await reader.getByLabel("Buscar entrega", { exact: true }).fill("001");
+    await expect(reader.locator(".delivery-card")).toHaveCount(1);
+    await reader.locator(".impact-workspace").screenshot({
+      path: testInfo.outputPath("informe-consulta-movil.png"),
+      animations: "disabled",
+    });
+    expect(
+      await reader.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  } finally {
+    await context.close();
+  }
   expect(errors).toEqual([]);
 });

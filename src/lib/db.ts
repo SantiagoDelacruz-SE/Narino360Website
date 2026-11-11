@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { Activity, ActivityInput } from "./domain";
 import { migrateUserRoles } from "./migrations";
+import { ensureImpactSchema } from "./impact-schema";
 export const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let connection: DatabaseSync | undefined;
 export function db() {
@@ -19,6 +20,7 @@ export function db() {
  CREATE TABLE IF NOT EXISTS jornadas(id INTEGER PRIMARY KEY, payload TEXT NOT NULL, author TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
  `);
     migrateUserRoles(opened);
+    ensureImpactSchema(opened);
     connection = opened;
     return connection;
   } catch (error) {

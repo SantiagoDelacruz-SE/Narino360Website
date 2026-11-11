@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import sharp from "sharp";
+import { impactFixture } from "./impact-fixture";
+import type { ImpactReport, Delivery } from "../src/lib/impact-domain";
 import {
   MUNICIPALITIES,
   validateActivity,
@@ -1264,4 +1266,425 @@ test("Se conserva un administrador activo ante cambios propios y solicitudes con
     ).status,
     200,
   );
+});
+
+test("Impactos y entregas: acceso, importación atómica sin duplicar jornadas, edición y vínculos persistentes", async () => {
+  const auth = await import("../src/lib/auth");
+  auth.createUser("impact-editor", "Editor de impacto", password, "Editor");
+  auth.createUser(
+    "impact-consulta",
+    "Consulta de impacto",
+    password,
+    "Consulta",
+  );
+  const impactEditor = await login("impact-editor"),
+    consulta = await login("impact-consulta");
+  const guestLogin = await request("/api/auth", "POST", {
+    action: "guest",
+    firstName: "Invitado",
+    lastName: "Impactos",
+    entity: "Entidad de prueba",
+    position: "Consulta",
+  });
+  assert.equal(guestLogin.status, 200);
+  const impactGuest = guestLogin.headers.get("set-cookie")!.split(";")[0];
+  assert.equal((await request("/api/impactos")).status, 401);
+  assert.equal((await request("/api/entregas?reportId=1")).status, 401);
+  const bundle = impactFixture("prueba-importacion-" + randomUUID());
+  for (const cookie of [impactGuest, consulta]) {
+    assert.equal(
+      (await request("/api/impactos", "POST", bundle, cookie)).status,
+      403,
+    );
+    assert.equal(
+      (await request("/api/impactos", "GET", undefined, cookie)).status,
+      200,
+    );
+    assert.equal(
+      (await request("/api/entregas?reportId=1", "GET", undefined, cookie))
+        .status,
+      200,
+    );
+    assert.equal(
+      (await request("/api/entregas", "POST", {}, cookie)).status,
+      403,
+    );
+  }
+  assert.equal(
+    (
+      await request(
+        "/api/impactos",
+        "POST",
+        bundle,
+        admin,
+        "https://otro.example",
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await request("/api/entregas", "PUT", {}, admin, "https://otro.example"))
+      .status,
+    403,
+  );
+  const before = db.listActivities();
+  const imported = await request("/api/impactos", "POST", bundle, impactEditor);
+  assert.equal(imported.status, 201, await imported.clone().text());
+  const reportId = (await imported.json()).id;
+  assert.deepEqual(db.listActivities(), before);
+  let report: ImpactReport = (
+    await (await request("/api/impactos", "GET", undefined, consulta)).json()
+  ).reports.find((r: ImpactReport) => r.id === reportId);
+  assert.equal(report.deliveryCount, 49);
+  assert.equal(report.periodStatus, "Pendiente");
+  assert.equal(
+    report.lines.reduce((n, l) => n + l.people, 0),
+    1000,
+  );
+  let deliveries: Delivery[] = (
+    await (
+      await request(
+        "/api/entregas?reportId=" + reportId,
+        "GET",
+        undefined,
+        consulta,
+      )
+    ).json()
+  ).deliveries;
+  assert.equal(deliveries.length, 49);
+  for (let i = 0; i < 2; i++) {
+    const result = await request(
+      "/api/entregas",
+      "POST",
+      {
+        ...bundle.deliveries[0],
+        reportId,
+        actNumber: "",
+        title: "Entrega sin acta " + i,
+      },
+      impactEditor,
+    );
+    assert.equal(result.status, 201);
+  }
+  const withoutActs = (
+    await (
+      await request(
+        "/api/entregas?reportId=" + reportId,
+        "GET",
+        undefined,
+        admin,
+      )
+    ).json()
+  ).deliveries as Delivery[];
+  assert.equal(withoutActs.filter((d) => d.actNumber === "").length, 2);
+  assert.equal(deliveries[0].sourceDateText, "13 de agosto de 20206");
+  assert.equal(
+    (await request("/api/impactos", "POST", bundle, admin)).status,
+    409,
+  );
+  const bad = impactFixture("bad-" + randomUUID());
+  bad.deliveries[48].lineId = "inexistente";
+  const reportsBefore = (
+    await (await request("/api/impactos", "GET", undefined, admin)).json()
+  ).reports.length;
+  assert.equal(
+    (await request("/api/impactos", "POST", bad, admin)).status,
+    400,
+  );
+  assert.equal(
+    (await (await request("/api/impactos", "GET", undefined, admin)).json())
+      .reports.length,
+    reportsBefore,
+  );
+  const missing = {
+    ...activity,
+    title: "Jornada sin cifra individual",
+    people: null,
+  };
+  assert.equal(
+    (await request("/api/jornadas", "POST", missing, admin)).status,
+    201,
+  );
+  const journey = db.listActivities().find((a) => a.title === missing.title)!;
+  assert.equal(journey.people, null);
+  assert.equal(
+    (
+      await request(
+        "/api/jornadas",
+        "POST",
+        {
+          ...missing,
+          title: "Otra jornada respaldada por la misma acta",
+          program: "Cultivos para la Paz",
+        },
+        admin,
+      )
+    ).status,
+    201,
+  );
+  const secondJourney = db
+    .listActivities()
+    .find((a) => a.title === "Otra jornada respaldada por la misma acta")!;
+  const updated = {
+    ...deliveries[0],
+    activityIds: [journey.id, secondJourney.id],
+    dates: ["2026-05-20"],
+    municipalities: ["Pasto", "Tumaco"],
+    items: [{ product: "Arroz", quantity: 2, unit: "bultos" }],
+    reviewStatus: "Revisada",
+  };
+  assert.equal(
+    (await request("/api/entregas", "PUT", updated, impactEditor)).status,
+    200,
+  );
+  assert.equal(
+    db.listActivities().find((a) => a.id === journey.id)!.people,
+    null,
+  );
+  assert.equal(db.listActivities().length, before.length + 2);
+  const linked = (
+    await (
+      await request(
+        "/api/entregas?reportId=" + reportId,
+        "GET",
+        undefined,
+        admin,
+      )
+    ).json()
+  ).deliveries as Delivery[];
+  assert.deepEqual(
+    linked.find((d) => d.id === updated.id)!.activityIds,
+    [journey.id, secondJourney.id].sort((a, b) => a - b),
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/entregas",
+        "PUT",
+        { ...deliveries[1], activityIds: [journey.id, secondJourney.id] },
+        impactEditor,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/entregas",
+        "POST",
+        { ...updated, actNumber: "1" },
+        admin,
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/entregas",
+        "PUT",
+        { ...updated, lineId: "otra" },
+        admin,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/entregas",
+        "PUT",
+        { ...updated, activityIds: [99999999] },
+        admin,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/impactos",
+        "PUT",
+        { ...report, lines: report.lines.slice(1) },
+        admin,
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/impactos",
+        "PUT",
+        {
+          ...report,
+          periodStatus: "Confirmado",
+          periodStart: "2026-06-01",
+          periodEnd: "2026-06-30",
+        },
+        admin,
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/impactos",
+        "PUT",
+        {
+          ...report,
+          periodStatus: "Confirmado",
+          periodStart: "2026-01-01",
+          periodEnd: "2026-12-31",
+        },
+        impactEditor,
+      )
+    ).status,
+    200,
+  );
+  report = {
+    ...report,
+    periodStatus: "Confirmado",
+    periodStart: "2026-01-01",
+    periodEnd: "2026-12-31",
+  };
+  assert.equal(
+    (
+      await request(
+        "/api/entregas",
+        "PUT",
+        { ...updated, dates: ["2027-01-01"] },
+        admin,
+      )
+    ).status,
+    400,
+  );
+  for (const cookie of [impactEditor, consulta, impactGuest]) {
+    assert.equal(
+      (await request("/api/impactos", "DELETE", { id: reportId }, cookie))
+        .status,
+      403,
+    );
+    assert.equal(
+      (await request("/api/entregas", "DELETE", { id: updated.id }, cookie))
+        .status,
+      403,
+    );
+  }
+  const upload = new FormData();
+  upload.set("kind", "documento");
+  upload.set("title", "Soporte de informe");
+  upload.set("program", "Banco de Alimentos");
+  upload.set(
+    "file",
+    new Blob(["%PDF-1.4\n%%EOF"], { type: "application/pdf" }),
+    "soporte.pdf",
+  );
+  const pdf = await request("/api/media", "POST", upload, admin);
+  assert.equal(pdf.status, 201);
+  const pdfId = (await pdf.json()).asset.id;
+  assert.equal(
+    (
+      await request(
+        "/api/impactos",
+        "PUT",
+        { ...report, sourceAssetId: pdfId },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/media", "DELETE", { id: pdfId }, admin)).status,
+    409,
+  );
+  assert.equal(
+    (await request("/api/jornadas", "DELETE", { id: journey.id }, admin))
+      .status,
+    200,
+  );
+  deliveries = (
+    await (
+      await request(
+        "/api/entregas?reportId=" + reportId,
+        "GET",
+        undefined,
+        admin,
+      )
+    ).json()
+  ).deliveries;
+  assert.deepEqual(deliveries.find((d) => d.id === updated.id)!.activityIds, [
+    secondJourney.id,
+  ]);
+  assert.equal(
+    (await request("/api/entregas", "DELETE", { id: updated.id }, admin))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/impactos", "DELETE", { id: reportId }, admin)).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/media", "DELETE", { id: pdfId }, admin)).status,
+    200,
+  );
+  assert.equal(
+    (
+      await (
+        await request(
+          "/api/entregas?reportId=" + reportId,
+          "GET",
+          undefined,
+          admin,
+        )
+      ).json()
+    ).deliveries.length,
+    0,
+  );
+  assert(db.listActivities().some((a) => a.id === secondJourney.id));
+  assert.equal(
+    (await request("/api/jornadas", "DELETE", { id: secondJourney.id }, admin))
+      .status,
+    200,
+  );
+  assert.deepEqual(db.listActivities(), before);
+  assert(
+    (db
+      .db()
+      .prepare(
+        "SELECT COUNT(*) AS n FROM registro_accesos_usuarios WHERE event='impacto.importado'",
+      )
+      .get()!.n as number) > 0,
+  );
+});
+
+test("Un fallo dentro de la importación revierte informe y entregas, sin dejar un lote parcial", async () => {
+  const database = db.db();
+  const before = database
+    .prepare("SELECT COUNT(*) AS n FROM impactos_informes")
+    .get()!.n;
+  database.exec(
+    "CREATE TRIGGER rechazar_acta_prueba BEFORE INSERT ON donacion_entregas WHEN NEW.act_number='002' BEGIN SELECT RAISE(ABORT,'Fallo de prueba'); END",
+  );
+  try {
+    const response = await request(
+      "/api/impactos",
+      "POST",
+      impactFixture("rollback-" + randomUUID(), 3),
+      admin,
+    );
+    assert.equal(response.status, 500);
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS n FROM impactos_informes").get()!.n,
+      before,
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS n FROM donacion_entregas").get()!.n,
+      0,
+    );
+  } finally {
+    database.exec("DROP TRIGGER rechazar_acta_prueba");
+  }
 });

@@ -3743,3 +3743,294 @@ td small {
     font-size: 22px;
   }
 }
+
+/* Reports preserve aggregate scope; deliveries never become map actions. */
+.impact-overview {
+  padding: 20px;
+  margin: 20px 0;
+}
+.impact-overview .section-heading {
+  margin-top: 0;
+}
+.impact-overview h2 {
+  font-size: 16px;
+}
+.impact-overview-grid,
+.impact-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+.impact-overview-grid > article {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--yellow);
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--white);
+}
+.impact-overview-grid h3 {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+.impact-overview-grid p,
+.impact-report-card p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.impact-value {
+  display: block;
+  font-size: 24px;
+  line-height: 1.4;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.impact-workspace {
+  padding-top: 12px;
+}
+.impact-workspace .section-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.impact-workspace .section-heading p {
+  max-width: 700px;
+  line-height: 1.7;
+}
+.impact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.impact-import-label {
+  position: relative;
+  cursor: pointer;
+}
+.impact-import-label input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+}
+.impact-import-label:focus-within {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.impact-report-card {
+  padding: 22px;
+  background: var(--white);
+}
+.impact-report-card h3 {
+  font-size: 17px;
+  line-height: 1.6;
+}
+.impact-status {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--green) 12%, white);
+  color: var(--black);
+}
+.impact-status.pending {
+  background: color-mix(in srgb, var(--yellow) 25%, white);
+}
+.impact-report-detail > .text-link {
+  margin: 10px 0 20px;
+}
+.impact-scope {
+  display: block;
+  margin-bottom: 20px;
+}
+.impact-import-preview {
+  display: block;
+}
+.impact-scope p {
+  margin: 10px 0 0;
+  line-height: 1.7;
+}
+.impact-line-table {
+  min-width: 560px;
+}
+.impact-line-table td:first-child {
+  font-weight: 700;
+}
+.impact-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 0;
+}
+.impact-filters label {
+  display: grid;
+  gap: 7px;
+  flex: 1 1 200px;
+  font-size: 12px;
+}
+.impact-filters input,
+.impact-filters select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--white);
+  color: var(--ink);
+}
+.delivery-list {
+  display: grid;
+  gap: 14px;
+}
+.delivery-card {
+  padding: 20px;
+  background: var(--white);
+}
+.delivery-card h4 {
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 14px 0;
+  overflow-wrap: anywhere;
+}
+.delivery-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.delivery-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  font-size: 12px;
+}
+.delivery-card dt {
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.delivery-card dd {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.delivery-products {
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 16px 0;
+  padding-left: 20px;
+}
+.delivery-notes {
+  border-left: 3px solid var(--yellow);
+  padding: 10px 14px;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+.impact-line-editor,
+.delivery-item,
+.delivery-destinations {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.impact-line-editor legend,
+.delivery-item legend,
+.delivery-destinations legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.delivery-destinations > div {
+  max-height: 200px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.delivery-destinations > div > label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.delivery-destinations input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  flex-shrink: 0;
+}
+.delivery-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.delivery-tags button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  padding: 7px 10px;
+}
+.kpi-value.kpi-text {
+  font-size: 20px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .impact-overview,
+  .impact-report-card,
+  .delivery-card {
+    padding: 16px;
+  }
+  .impact-value {
+    font-size: 21px;
+  }
+  .delivery-card dl,
+  .delivery-destinations > div {
+    grid-template-columns: 1fr;
+  }
+  .impact-actions > .button {
+    flex: 1 1 auto;
+  }
+}
+.delivery-activities {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+.delivery-activities legend {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 6px;
+}
+.delivery-activities > div {
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+}
+.delivery-activities label {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.delivery-activities input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  flex-shrink: 0;
+  margin-top: 2px;
+}

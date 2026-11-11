@@ -23,6 +23,7 @@ import {
 } from "@/lib/domain";
 import Publications from "./publications";
 import { number } from "./api";
+import ImpactWorkspace from "./impact-workspace";
 
 const icons = [BookOpen, ShieldCheck, Utensils, Sprout, Users];
 const sections = [
@@ -32,6 +33,7 @@ const sections = [
   "Ferias",
   "Noticias",
   "Documentos",
+  "Entregas e impactos",
 ] as const;
 type Section = (typeof sections)[number];
 export default function ComponentsHub({
@@ -40,6 +42,8 @@ export default function ComponentsHub({
   activities,
   assets,
   canEdit,
+  isAdmin,
+  initialImpacts,
   onCreate,
   onOpen,
   onUpload,
@@ -52,6 +56,8 @@ export default function ComponentsHub({
   activities: Activity[];
   assets: Asset[];
   canEdit: boolean;
+  isAdmin: boolean;
+  initialImpacts: boolean;
   onCreate: (type: RecordType, component: Component) => void;
   onOpen: (activity: Activity) => void;
   onUpload: (component?: Component) => void;
@@ -60,7 +66,11 @@ export default function ComponentsHub({
   onError: (message: string) => void;
 }) {
   const [section, setSection] = useState<Section>(
-    component === "Observatorio" ? "Documentos" : "Resumen",
+    initialImpacts
+      ? "Entregas e impactos"
+      : component === "Observatorio"
+        ? "Documentos"
+        : "Resumen",
   );
   const [library, setLibrary] = useState(false);
   const tabId = useId();
@@ -235,7 +245,18 @@ export default function ComponentsHub({
         id={tabId + "-panel"}
         aria-labelledby={tabId + "-" + sections.indexOf(section)}
       >
-        {section === "Documentos" ? (
+        {section === "Entregas e impactos" ? (
+          <ImpactWorkspace
+            component={component}
+            activities={activities}
+            assets={assets}
+            canEdit={canEdit}
+            isAdmin={isAdmin}
+            onPreview={onPreview}
+            onOpen={onOpen}
+            onRefresh={onRefresh}
+          />
+        ) : section === "Documentos" ? (
           <Publications
             component={component}
             assets={documents}

@@ -76,6 +76,11 @@ anteriores y nuevos.
   Los 64 límites municipales y su procedencia están documentados en
   [Cartografía](docs/cartografia/README.md).
 
+- Entregas e impactos consolidados: informes con líneas, período pendiente o
+  confirmado y PDF privado; actas con varios destinos, productos y vínculos a
+  jornadas existentes. Los totales de informes se muestran aparte, sin repartir
+  personas ni duplicar eventos. Las jornadas permiten dejar personas en blanco
+  como «Sin desagregar». Consulta [la guía de registro](docs/entregas-impactos.md).
 - FONSET sustituye la navegación independiente de Mapa territorial. Muestra
   **En construcción** para el futuro presupuesto y los proyectos; todavía no
   registra cifras presupuestales ni proyectos.
@@ -206,7 +211,8 @@ Configura `DATA_DIR` para una carpeta persistente fuera de `public/` (por defect
 Incluye:
 
 - `observatorio.sqlite`, con usuarios, sesiones, jornadas, intentos y las tablas
-  `registro_accesos_usuarios` y `registro_invitados`.
+  `registro_accesos_usuarios` y `registro_invitados`, además de `impactos_informes`
+  `donacion_entregas` y `donacion_entrega_jornadas`.
 - `media.json` y `media/`, con el catálogo de archivos y sus contenidos. La galería
   no requiere tablas de imágenes ni enlaces externos para almacenar sus archivos.
 

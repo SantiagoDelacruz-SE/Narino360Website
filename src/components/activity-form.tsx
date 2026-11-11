@@ -57,7 +57,8 @@ export default function ActivityForm({
       ];
       for (const name of numbers)
         (data as Record<string, unknown>)[name] =
-          (name === "latitude" || name === "longitude") && data[name] === ""
+          (name === "latitude" || name === "longitude" || name === "people") &&
+          data[name] === ""
             ? null
             : Number(data[name]);
       const validated = validateActivity({
@@ -293,13 +294,19 @@ export default function ActivityForm({
                 step="1"
                 min="0"
                 max="10000000"
-                required
-                value={draft[key] ?? 0}
+                required={key !== "people"}
+                placeholder={key === "people" ? "Sin desagregar" : undefined}
+                value={draft[key] ?? (key === "people" ? "" : 0)}
                 onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
               />
             </label>
           ))}
         </div>
+        <p className="form-help">
+          Si no tienes la cifra de personas para esta jornada, deja el campo
+          vacío. Se mostrará «Sin desagregar». Registra los totales por línea en
+          Entregas e impactos, sin repetirlos en cada evento.
+        </p>
         <label>
           Objetivo
           <textarea

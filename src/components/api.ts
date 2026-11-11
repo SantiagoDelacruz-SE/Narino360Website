@@ -89,7 +89,8 @@ export async function api<T = Record<string, unknown>>(
     signal?.removeEventListener("abort", cancel);
   }
 }
-export const number = (v: number) => new Intl.NumberFormat("es-CO").format(v);
+export const number = (v: number | null) =>
+  v === null ? "Sin desagregar" : new Intl.NumberFormat("es-CO").format(v);
 export const money = (v: number) =>
   new Intl.NumberFormat("es-CO", {
     style: "currency",

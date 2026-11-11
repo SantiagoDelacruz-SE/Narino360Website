@@ -285,6 +285,17 @@ export async function DELETE(request: Request) {
     const items = readAssets(),
       asset = items.find((a) => a.id === value.id);
     if (!asset) throw new AppError("Archivo no encontrado.", 404);
+    if (
+      db()
+        .prepare(
+          "SELECT id FROM impactos_informes WHERE json_extract(payload,'$.sourceAssetId')=?",
+        )
+        .get(asset.id)
+    )
+      throw new AppError(
+        "Este PDF es soporte de un informe de impacto. Cambia o desvincula el soporte del informe antes de eliminarlo.",
+        409,
+      );
     writeAssets(items.filter((a) => a.id !== asset.id));
     await imageTask(async () => {
       if (existsSync(assetPath(asset.filename)))

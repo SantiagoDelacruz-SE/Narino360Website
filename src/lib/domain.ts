@@ -109,7 +109,7 @@ export type ActivityInput = {
   program: Program;
   latitude: number | null;
   longitude: number | null;
-  people: number;
+  people: number | null;
   families: number;
   weaponsSeized: number;
   weaponsVoluntary: number;
@@ -308,7 +308,7 @@ export function validateActivity(value: unknown): ActivityInput {
     program,
     latitude: withoutCoordinates ? null : (a.latitude as number),
     longitude: withoutCoordinates ? null : (a.longitude as number),
-    people: num("people", 1e8),
+    people: a.people === null ? null : num("people", 1e8),
     families: num("families", 1e8),
     weaponsSeized: num("weaponsSeized", 1e7),
     weaponsVoluntary: num("weaponsVoluntary", 1e7),
