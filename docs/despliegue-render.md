@@ -80,7 +80,9 @@ ni quitar el rol al último administrador activo.
   El selector **Mapa de calor** abre la capa de intensidad y **Puntos
   individuales** recupera todos los marcadores de la misma consulta.
   Los contadores
-  distinguen actividades de operativos y FONSET muestra **En construcción**.
+  distinguen actividades de operativos. FONSET permite registrar proyectos con
+  nombre, objetivo, costo en COP y estado; al recargar se conservan los datos.
+  Consulta puede verlos y exportarlos, sin modificarlos.
 - Componentes muestra Observatorio, PISCC, Banco de Alimentos, Cultivos para la
   Paz y Acción Unificada, con sus registros y documentos correspondientes.
 - Un PDF válido abre con **Previsualizar PDF** y permite cambiar página, ajustar

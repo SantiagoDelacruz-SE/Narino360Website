@@ -34,7 +34,6 @@ import {
   Pencil,
   KeyRound,
   BookOpen,
-  HardHat,
   Eye,
 } from "lucide-react";
 import {
@@ -62,6 +61,7 @@ import ActivityForm from "./activity-form";
 import MediaUpload from "./media-upload";
 import Presentation from "./presentation";
 import ComponentsHub from "./components-hub";
+import Fonset from "./fonset";
 import ImpactOverview from "./impact-overview";
 import PdfPreview from "./pdf-preview";
 import MapPanel from "./municipal-map-panel";
@@ -845,30 +845,7 @@ export default function Observatory({
               </div>
             </>
           )}
-          {tab === "fonset" && (
-            <section className="panel fonset-placeholder">
-              <span className="construction-tag">
-                <HardHat size={18} />
-                En construcción
-              </span>
-              <div className="fonset-symbol">
-                <Building2 size={48} />
-              </div>
-              <span className="overline">
-                FONDO TERRITORIAL DE SEGURIDAD Y CONVIVENCIA CIUDADANA
-              </span>
-              <h2>Presupuesto y proyectos FONSET</h2>
-              <p>
-                Estamos preparando un espacio para consultar el presupuesto, los
-                proyectos y el seguimiento a los recursos del FONSET.
-              </p>
-              <div className="fonset-future">
-                <span>Presupuesto · Próximamente</span>
-                <span>Proyectos · Próximamente</span>
-                <span>Seguimiento · Próximamente</span>
-              </div>
-            </section>
-          )}
+          {tab === "fonset" && <Fonset user={user} />}
           {tab === "jornadas" && (
             <section className="panel">
               <div className="panel-heading">

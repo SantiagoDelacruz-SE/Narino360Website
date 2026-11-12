@@ -1214,12 +1214,12 @@ test("FONSET y componentes distinguen operativos y ferias; los PDF se leen con p
     (await kpi("Actividades ejecutadas").innerText()).replace(/\./g, ""),
   );
   await page.getByRole("button", { name: "FONSET", exact: true }).click();
-  await expect(
-    page.getByText("En construcción", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("En construcción", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("heading", {
-      name: "Presupuesto y proyectos FONSET",
+      name: "Proyectos FONSET",
       exact: true,
     }),
   ).toBeVisible();
@@ -2079,12 +2079,10 @@ test("Una actividad de Banco de Alimentos cubre nueve municipios, cuenta una sol
     "data-action-count",
     "0",
   );
-  await page
-    .locator(".map-panel")
-    .screenshot({
-      path: testInfo.outputPath("una-actividad-nueve-municipios.png"),
-      animations: "disabled",
-    });
+  await page.locator(".map-panel").screenshot({
+    path: testInfo.outputPath("una-actividad-nueve-municipios.png"),
+    animations: "disabled",
+  });
   await page
     .getByRole("combobox", { name: "Municipio", exact: true })
     .selectOption("Belén");
@@ -2180,5 +2178,230 @@ test("Una actividad de Banco de Alimentos cubre nueve municipios, cuenta una sol
     ),
   ).toBe(true);
   await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  expect(errors).toEqual([]);
+});
+
+test("FONSET registra, consulta y edita proyectos con costos COP y conserva el acceso de solo lectura", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(120000);
+  page.setDefaultTimeout(15000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/acceso");
+  await page.getByLabel("Usuario", { exact: true }).fill("admin-prueba");
+  await page
+    .getByLabel("Contraseña", { exact: true })
+    .fill("Clave-Solo-Pruebas-2026");
+  await page.getByRole("button", { name: "Ingresar al observatorio" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Observatorio de Paz, Seguridad y Convivencia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const before = await (await page.request.get("/api/jornadas")).json();
+  await page.getByRole("button", { name: "FONSET", exact: true }).click();
+  const workspace = page.locator(".fonset-workspace");
+  const dialog = page.getByRole("dialog");
+  const objective =
+    "Fortalecer la convivencia ciudadana mediante formación y dotación comunitaria. ".repeat(
+      7,
+    ) + "Objetivo completo verificable.";
+  const create = async (
+    name: string,
+    cost: string,
+    status: string,
+    purpose: string,
+  ) => {
+    await page
+      .getByRole("button", { name: "Nuevo proyecto", exact: true })
+      .click();
+    await dialog.getByLabel("Nombre del proyecto", { exact: true }).fill(name);
+    await dialog
+      .getByLabel("Objetivo del proyecto", { exact: true })
+      .fill(purpose);
+    await dialog
+      .getByLabel("Costo del proyecto (COP)", { exact: true })
+      .fill(cost);
+    await dialog
+      .getByLabel("Estado del proyecto", { exact: true })
+      .fill(status);
+    await dialog
+      .getByRole("button", { name: "Guardar proyecto", exact: true })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      workspace.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+  };
+  await create(
+    "Convivencia FONSET de prueba",
+    "125000000.50",
+    "En revisión del comité",
+    objective,
+  );
+  await create(
+    "Dotación FONSET de prueba",
+    "1000000",
+    "En ejecución",
+    "Dotación comunitaria de prueba",
+  );
+  await expect(workspace.locator(".fonset-project-card")).toHaveCount(2);
+  await expect(workspace.locator('[data-fonset-stat="cost"]')).toContainText(
+    "126.000.000,50",
+  );
+  await workspace
+    .getByLabel("Buscar proyecto", { exact: true })
+    .fill("formación");
+  await expect(workspace.locator(".fonset-project-card")).toHaveCount(1);
+  await workspace
+    .getByLabel("Filtrar proyectos por estado", { exact: true })
+    .selectOption("En revisión del comité");
+  await expect(workspace.locator('[data-fonset-stat="cost"]')).toContainText(
+    "125.000.000,50",
+  );
+  await workspace
+    .getByRole("button", { name: "Limpiar filtros", exact: true })
+    .click();
+  await expect(workspace.locator(".fonset-project-card")).toHaveCount(2);
+  await workspace
+    .getByRole("button", {
+      name: "Ver proyecto Convivencia FONSET de prueba",
+      exact: true,
+    })
+    .click();
+  await expect(dialog.locator(".fonset-detail p")).toHaveText(objective);
+  await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await workspace
+    .getByRole("button", {
+      name: "Editar proyecto Convivencia FONSET de prueba",
+      exact: true,
+    })
+    .click();
+  await dialog
+    .getByLabel("Costo del proyecto (COP)", { exact: true })
+    .fill("130000000.75");
+  await dialog
+    .getByLabel("Estado del proyecto", { exact: true })
+    .fill("Finalizado por comité");
+  await dialog
+    .getByRole("button", { name: "Guardar proyecto", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(workspace.locator('[data-fonset-stat="cost"]')).toContainText(
+    "131.000.000,75",
+  );
+  await page.reload();
+  await expect(workspace.locator(".fonset-project-card")).toHaveCount(2);
+  const stored = await (await page.request.get("/api/fonset")).json();
+  expect(
+    stored.projects.find(
+      (p: { name: string }) => p.name === "Convivencia FONSET de prueba",
+    ).costCents,
+  ).toBe(13000000075);
+  await workspace.screenshot({
+    path: testInfo.outputPath("fonset-proyectos-desktop.png"),
+    animations: "disabled",
+  });
+  const download = page.waitForEvent("download");
+  await workspace
+    .getByRole("button", { name: "Exportar proyectos CSV", exact: true })
+    .click();
+  expect((await download).suggestedFilename()).toBe("proyectos-fonset.csv");
+  const created = await page.request.post("/api/usuarios", {
+    headers: { origin: new URL(page.url()).origin },
+    data: {
+      username: "fonset-lectura",
+      name: "Consulta FONSET",
+      role: "Consulta",
+      password: "Clave-Prueba-Fonset-2026",
+    },
+  });
+  expect(created.status()).toBe(201);
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    const reader = await context.newPage();
+    reader.on("pageerror", (e) => errors.push(e.message));
+    await reader.goto("/acceso");
+    await reader.getByLabel("Usuario", { exact: true }).fill("fonset-lectura");
+    await reader
+      .getByLabel("Contraseña", { exact: true })
+      .fill("Clave-Prueba-Fonset-2026");
+    await reader
+      .getByRole("button", { name: "Ingresar al observatorio" })
+      .click();
+    await expect(
+      reader.getByRole("heading", {
+        name: "Observatorio de Paz, Seguridad y Convivencia",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await reader.goto("/#fonset");
+    const readonly = reader.locator(".fonset-workspace");
+    await expect(readonly.locator(".fonset-project-card")).toHaveCount(2);
+    await expect(
+      readonly.getByRole("button", { name: "Nuevo proyecto", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      readonly.getByRole("button", { name: /^Editar proyecto / }),
+    ).toHaveCount(0);
+    await expect(
+      readonly.getByRole("button", { name: /^Eliminar proyecto / }),
+    ).toHaveCount(0);
+    await readonly
+      .getByRole("button", {
+        name: "Ver proyecto Convivencia FONSET de prueba",
+        exact: true,
+      })
+      .click();
+    await expect(
+      reader.getByRole("dialog").locator(".fonset-detail p"),
+    ).toHaveText(objective);
+    await reader
+      .getByRole("dialog")
+      .getByRole("button", { name: "Cerrar", exact: true })
+      .click();
+    await readonly.screenshot({
+      path: testInfo.outputPath("fonset-consulta-movil.png"),
+      animations: "disabled",
+    });
+    expect(
+      await reader.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  } finally {
+    await context.close();
+  }
+  for (const name of [
+    "Dotación FONSET de prueba",
+    "Convivencia FONSET de prueba",
+  ]) {
+    await workspace
+      .getByRole("button", { name: "Eliminar proyecto " + name, exact: true })
+      .click();
+    await expect(dialog).toContainText(name);
+    await dialog
+      .getByRole("button", { name: "Eliminar proyecto", exact: true })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      workspace.getByRole("heading", { name, exact: true }),
+    ).toHaveCount(0);
+  }
+  await expect(
+    workspace.getByRole("heading", {
+      name: "Aún no hay proyectos FONSET registrados",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await (await page.request.get("/api/jornadas")).json()).toEqual(
+    before,
+  );
   expect(errors).toEqual([]);
 });

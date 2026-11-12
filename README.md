@@ -84,9 +84,11 @@ anteriores y nuevos.
   jornadas existentes. Los totales de informes se muestran aparte, sin repartir
   personas ni duplicar eventos. Las jornadas permiten dejar personas en blanco
   como «Sin desagregar». Consulta [la guía de registro](docs/entregas-impactos.md).
-- FONSET sustituye la navegación independiente de Mapa territorial. Muestra
-  **En construcción** para el futuro presupuesto y los proyectos; todavía no
-  registra cifras presupuestales ni proyectos.
+- FONSET registra proyectos con nombre, objetivo, costo en pesos colombianos y
+  estado libre. Incluye búsqueda, filtro por estado, detalle y exportación CSV.
+  Administrador y Editor crean y editan; solo Administrador elimina. Consulta e
+  Invitado pueden leer. El total corresponde al costo de los proyectos de la
+  consulta, sin acreditar ejecución presupuestal. Consulta [la guía FONSET](docs/fonset.md).
 - Componentes: Observatorio, PISCC, Banco de Alimentos, Cultivos para la Paz y
   Acción Unificada. Cada uno permite consultar resumen, actividades, operativos,
   ferias, noticias y documentos. Los enlaces de cada componente se conservan al
@@ -215,7 +217,7 @@ Incluye:
 
 - `observatorio.sqlite`, con usuarios, sesiones, jornadas, intentos y las tablas
   `registro_accesos_usuarios` y `registro_invitados`, además de `impactos_informes`
-  `donacion_entregas` y `donacion_entrega_jornadas`.
+  `donacion_entregas`, `donacion_entrega_jornadas` y `fonset_proyectos`.
 - `media.json` y `media/`, con el catálogo de archivos y sus contenidos. La galería
   no requiere tablas de imágenes ni enlaces externos para almacenar sus archivos.
 

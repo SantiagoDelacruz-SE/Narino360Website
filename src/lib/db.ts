@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Activity, ActivityInput } from "./domain";
 import { migrateUserRoles } from "./migrations";
 import { ensureImpactSchema } from "./impact-schema";
+import { ensureFonsetSchema } from "./fonset-schema";
 export const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let connection: DatabaseSync | undefined;
 export function db() {
@@ -21,6 +22,7 @@ export function db() {
  `);
     migrateUserRoles(opened);
     ensureImpactSchema(opened);
+    ensureFonsetSchema(opened);
     connection = opened;
     return connection;
   } catch (error) {

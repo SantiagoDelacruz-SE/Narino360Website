@@ -4088,3 +4088,205 @@ td small {
     grid-template-columns: 1fr;
   }
 }
+
+/* FONSET projects: costs and states are registered independently of activities. */
+.fonset-workspace > .section-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.fonset-workspace h2 {
+  font-size: 24px;
+  margin: 10px 0;
+}
+.fonset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.fonset-summary {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr;
+  gap: 16px;
+  margin: 24px 0;
+}
+.fonset-summary article {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--green);
+  border-radius: 9px;
+  padding: 20px;
+  min-width: 0;
+}
+.fonset-summary article:nth-child(2) {
+  border-top-color: var(--yellow);
+}
+.fonset-summary article > span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.fonset-summary strong {
+  display: block;
+  font-size: 28px;
+  margin-top: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.fonset-summary small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.fonset-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 24px 0 16px;
+}
+.fonset-filters label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  flex: 1 1 240px;
+}
+.fonset-filters input,
+.fonset-filters select {
+  min-width: 0;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
+}
+.fonset-result-count {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 16px 0;
+}
+.fonset-project-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.fonset-project-card {
+  padding: 24px;
+  background: var(--white);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fonset-project-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+.fonset-project-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--green) 12%, white);
+  color: var(--green);
+}
+.fonset-status {
+  display: inline-block;
+  max-width: 100%;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--light-blue) 24%, white);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.fonset-project-card h3 {
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 18px 0 20px;
+  overflow-wrap: anywhere;
+}
+.fonset-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.fonset-cost {
+  display: block;
+  font-size: 27px;
+  line-height: 1.4;
+  margin: 8px 0 18px;
+  overflow-wrap: anywhere;
+}
+.fonset-project-card h4 {
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.fonset-objective {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0 0 22px;
+  overflow-wrap: anywhere;
+}
+.fonset-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding-top: 16px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+.fonset-project-actions .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  text-align: left;
+}
+.fonset-detail > h3 {
+  font-size: 22px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.fonset-detail > p {
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 800px) {
+  .fonset-summary {
+    grid-template-columns: 1fr;
+  }
+  .fonset-project-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .fonset-project-card {
+    padding: 18px;
+  }
+  .fonset-summary strong,
+  .fonset-cost {
+    font-size: 24px;
+  }
+  .fonset-workspace .section-heading > .fonset-actions {
+    width: 100%;
+  }
+  .fonset-workspace .section-heading > .fonset-actions .button {
+    flex: 1 1 auto;
+  }
+}

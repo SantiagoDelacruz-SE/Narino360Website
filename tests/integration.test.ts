@@ -1800,3 +1800,194 @@ test("Una actividad con varios municipios se persiste una sola vez; la edición 
   );
   assert.deepEqual(db.listActivities(), before);
 });
+
+test("FONSET conserva costos exactos, estados libres, permisos y persistencia sin duplicar envíos", async () => {
+  const auth = await import("../src/lib/auth");
+  auth.createUser("fonset-editor", "Editor FONSET", password, "Editor");
+  auth.createUser("fonset-consulta", "Consulta FONSET", password, "Consulta");
+  const fonsetEditor = await login("fonset-editor"),
+    consulta = await login("fonset-consulta");
+  const invited = await request("/api/auth", "POST", {
+    action: "guest",
+    firstName: "Invitado",
+    lastName: "FONSET",
+    entity: "Entidad de prueba",
+    position: "Consulta",
+  });
+  assert.equal(invited.status, 200);
+  const fonsetGuest = invited.headers.get("set-cookie")!.split(";")[0];
+  const before = db.listActivities();
+  const input = {
+    name: "Proyecto sintético FONSET",
+    objective: "Mejorar la convivencia mediante un proyecto de prueba",
+    cost: "125000000.50",
+    status: "En revisión del comité",
+    submissionId: randomUUID(),
+  };
+  assert.equal((await request("/api/fonset")).status, 401);
+  for (const cookie of [consulta, fonsetGuest]) {
+    assert.equal(
+      (await request("/api/fonset", "GET", undefined, cookie)).status,
+      200,
+    );
+    assert.equal(
+      (await request("/api/fonset", "POST", input, cookie)).status,
+      403,
+    );
+    assert.equal(
+      (await request("/api/fonset", "PUT", { ...input, id: 1 }, cookie)).status,
+      403,
+    );
+    assert.equal(
+      (await request("/api/fonset", "DELETE", { id: 1 }, cookie)).status,
+      403,
+    );
+  }
+  assert.equal(
+    (await request("/api/fonset", "POST", input, admin, "https://otro.example"))
+      .status,
+    403,
+  );
+  const created = await request("/api/fonset", "POST", input, fonsetEditor);
+  assert.equal(created.status, 201, await created.clone().text());
+  const initial = (await created.json()).project;
+  assert.equal(initial.costCents, 12500000050);
+  assert.equal(initial.status, input.status);
+  assert.equal(initial.author, "fonset-editor");
+  const repeated = await request("/api/fonset", "POST", input, fonsetEditor);
+  assert.equal(repeated.status, 200);
+  assert.equal((await repeated.json()).project.id, initial.id);
+  assert.equal(
+    (await request("/api/fonset", "POST", { ...input, cost: "100" }, admin))
+      .status,
+    409,
+  );
+  const list = await request("/api/fonset", "GET", undefined, consulta);
+  assert.match(list.headers.get("cache-control")!, /private/);
+  assert.equal((await list.json()).projects.length, 1);
+  for (const change of [
+    { cost: "1.001" },
+    { cost: -1 },
+    { cost: "1.000.000" },
+    { status: "" },
+    { objective: "" },
+    { submissionId: "invalido" },
+  ])
+    assert.equal(
+      (await request("/api/fonset", "POST", { ...input, ...change }, admin))
+        .status,
+      400,
+    );
+  assert.equal(
+    (
+      await request(
+        "/api/fonset",
+        "PUT",
+        { ...input, id: initial.id, cost: "1.001" },
+        admin,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    db
+      .db()
+      .prepare("SELECT cost_cents FROM fonset_proyectos WHERE id=?")
+      .get(initial.id)!.cost_cents,
+    12500000050,
+  );
+  const updated = {
+    ...input,
+    id: initial.id,
+    name: "Proyecto actualizado FONSET",
+    objective: "Objetivo actualizado sin alterar jornadas",
+    cost: "130000000.75",
+    status: "Finalizado por comité",
+  };
+  assert.equal(
+    (await request("/api/fonset", "PUT", updated, fonsetEditor)).status,
+    200,
+  );
+  const persisted = db
+    .db()
+    .prepare("SELECT * FROM fonset_proyectos WHERE id=?")
+    .get(initial.id)!;
+  assert.equal(persisted.cost_cents, 13000000075);
+  assert.equal(persisted.status, updated.status);
+  assert.equal(
+    (await request("/api/fonset", "PUT", { ...updated, id: 99999999 }, admin))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await request("/api/fonset", "DELETE", { id: initial.id }, fonsetEditor))
+      .status,
+    403,
+  );
+  const event = db
+    .db()
+    .prepare(
+      "SELECT detail FROM registro_accesos_usuarios WHERE event='fonset.proyecto_actualizado' ORDER BY id DESC LIMIT 1",
+    )
+    .get()!;
+  const detail = JSON.parse(String(event.detail));
+  assert.equal(detail.before.costCents, 12500000050);
+  assert.equal(detail.after.costCents, 13000000075);
+  assert.equal(detail.objectiveChanged, true);
+  assert.equal(
+    (await request("/api/fonset", "DELETE", { id: initial.id }, admin)).status,
+    200,
+  );
+  assert.equal(
+    (await request("/api/fonset", "DELETE", { id: initial.id }, admin)).status,
+    404,
+  );
+  const zero = await request(
+    "/api/fonset",
+    "POST",
+    { ...input, submissionId: randomUUID(), cost: 0 },
+    admin,
+  );
+  assert.equal(zero.status, 201);
+  const zeroId = (await zero.json()).project.id;
+  assert.equal(
+    (await request("/api/fonset", "DELETE", { id: zeroId }, admin)).status,
+    200,
+  );
+  assert.deepEqual(db.listActivities(), before);
+  assert.equal(
+    (await (await request("/api/fonset", "GET", undefined, admin)).json())
+      .projects.length,
+    0,
+  );
+});
+
+test("Un fallo de auditoría revierte la creación del proyecto FONSET", async () => {
+  const database = db.db();
+  const before = database
+    .prepare("SELECT COUNT(*) AS n FROM fonset_proyectos")
+    .get()!.n;
+  database.exec(
+    "CREATE TRIGGER fonset_fallo_auditoria BEFORE INSERT ON registro_accesos_usuarios WHEN NEW.event='fonset.proyecto_creado' BEGIN SELECT RAISE(ABORT,'Fallo de prueba'); END",
+  );
+  try {
+    const result = await request(
+      "/api/fonset",
+      "POST",
+      {
+        name: "Proyecto de prueba",
+        objective: "Probar operación atómica",
+        cost: "1.25",
+        status: "Estado de prueba",
+      },
+      admin,
+    );
+    assert.equal(result.status, 500);
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS n FROM fonset_proyectos").get()!.n,
+      before,
+    );
+  } finally {
+    database.exec("DROP TRIGGER fonset_fallo_auditoria");
+  }
+});
